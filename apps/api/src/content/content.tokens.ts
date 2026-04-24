@@ -1,0 +1,3 @@
+export const CONTENT_REPOSITORY = Symbol("CONTENT_REPOSITORY");
+export const CONTENT_ID_GENERATOR = Symbol("CONTENT_ID_GENERATOR");
+export const DATABASE_POOL = Symbol("DATABASE_POOL");

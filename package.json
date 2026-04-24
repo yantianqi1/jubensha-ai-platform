@@ -15,9 +15,9 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "clean": "turbo run clean && rimraf node_modules",
-    "db:up": "docker compose up -d postgres redis",
-    "db:down": "docker compose down",
-    "db:logs": "docker compose logs -f"
+    "db:up": "docker compose -p jubensha up -d postgres redis",
+    "db:down": "docker compose -p jubensha down",
+    "db:logs": "docker compose -p jubensha logs -f"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
