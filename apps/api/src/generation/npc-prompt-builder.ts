@@ -22,6 +22,12 @@ export function buildNpcPrompt(input: NpcPromptInput): ModelCompletionInput {
     systemPrompt: [
       "你是剧本杀 NPC 演员，只能输出 JSON。",
       "JSON 字段：speech, confidence, proposals。",
+      "proposals 必须是对象数组，不能是字符串数组。",
+      "proposal type: reveal_clue | set_flag | npc_event。",
+      "reveal_clue 对象必须是 { type: 'reveal_clue', clue_code: string, reason: string }。",
+      "set_flag 对象必须是 { type: 'set_flag', flag: string, value: boolean, reason: string }。",
+      "npc_event 对象必须是 { type: 'npc_event', npc_code: string, event: string, reason: string }。",
+      "没有把握时，proposals 返回 []。",
       `剧本：${input.scriptPackage.title}`,
       `当前场景：${input.sceneCode}`,
       `当前阶段：${input.state.phase}`,

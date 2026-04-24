@@ -25,7 +25,7 @@ const scriptPackage: ScriptPackage = {
     {
       clue_code: "C-01",
       title: "窗台划痕",
-      content: "窗台上有一道新鲜划痕。",
+      content: "窗台上有一道新鲜划痕，管家曾在附近徘徊。",
       initial_visibility: [{ kind: "public", value: "all" }],
       unlock_if: [],
     },
@@ -125,5 +125,19 @@ describe("NPC prompt builder", () => {
         playerMessage: "有人吗？",
       }),
     ).toThrow("Unknown NPC role: missing");
+  });
+
+  it("includes a strict proposals schema instruction", () => {
+    const prompt = buildNpcPrompt({
+      scriptPackage,
+      state,
+      sceneCode: "act1",
+      npcCode: "butler",
+      playerMessage: "你昨晚在哪里？",
+    });
+
+    expect(prompt.systemPrompt).toContain("proposals 必须是对象数组");
+    expect(prompt.systemPrompt).toContain("reveal_clue 对象必须是");
+    expect(prompt.systemPrompt).toContain("没有把握时，proposals 返回 []");
   });
 });
