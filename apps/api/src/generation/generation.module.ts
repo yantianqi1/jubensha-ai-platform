@@ -6,13 +6,8 @@ import { RuntimeService } from "../runtime/runtime-service.js";
 import { GenerationController } from "./generation.controller.js";
 import { GenerationService } from "./generation-service.js";
 import type { ModelProvider } from "./model-provider.js";
+import { createDemoModelProviderFromEnv } from "./scripted-demo-model-provider.js";
 import { MODEL_PROVIDER } from "./generation.tokens.js";
-
-class UnconfiguredModelProvider implements ModelProvider {
-  async completeJson(): Promise<string> {
-    throw new Error("Model provider is not configured");
-  }
-}
 
 @Module({
   imports: [ContentModule, RuntimeModule],
@@ -20,7 +15,7 @@ class UnconfiguredModelProvider implements ModelProvider {
   providers: [
     {
       provide: MODEL_PROVIDER,
-      useFactory: () => new UnconfiguredModelProvider(),
+      useFactory: () => createDemoModelProviderFromEnv(process.env),
     },
     {
       provide: GenerationService,

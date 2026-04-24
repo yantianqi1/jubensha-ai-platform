@@ -8,6 +8,17 @@ export const fogHarborDemoPackage = {
       name: "侦探",
       public_profile: "受邀调查雾港宅邸失踪案。",
     },
+    {
+      role_code: "butler",
+      name: "管家",
+      public_profile: "沉默的宅邸管家，熟悉每一扇窗。",
+      private_secret: "他知道窗台划痕来自昨夜的闯入者。",
+    },
+    {
+      role_code: "doctor",
+      name: "医生",
+      public_profile: "镇上医生，最后一次为死者开药。",
+    },
   ],
   clues: [
     {
