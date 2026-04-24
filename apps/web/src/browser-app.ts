@@ -1,13 +1,19 @@
 import { createApiClient } from "./api-client.js";
+import { resolveApiBaseUrl } from "./app-runtime-config.js";
 
 let roomId = "";
 
 document.documentElement.dataset.ready = "true";
+initializeApiBaseUrl();
 wireControls();
 
 function createClient() {
-  const baseUrl = readValue("[data-base-url]", "http://127.0.0.1:3001");
+  const baseUrl = readValue("[data-base-url]", resolveApiBaseUrl(window.location));
   return createApiClient(baseUrl);
+}
+
+function initializeApiBaseUrl(): void {
+  writeValue("[data-base-url]", resolveApiBaseUrl(window.location));
 }
 
 function wireControls(): void {

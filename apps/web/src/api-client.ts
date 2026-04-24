@@ -63,7 +63,7 @@ export function createApiClient(baseUrl: string, options: ApiClientOptions = {})
 
 async function postJson<T>(url: string, body: unknown, fetchImpl: typeof fetch): Promise<T> {
   return readResponse(
-    await fetchImpl(url, {
+    await fetchWithUrl(url, fetchImpl, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
@@ -72,7 +72,19 @@ async function postJson<T>(url: string, body: unknown, fetchImpl: typeof fetch):
 }
 
 async function readJson<T>(url: string, fetchImpl: typeof fetch): Promise<T> {
-  return readResponse(await fetchImpl(url));
+  return readResponse(await fetchWithUrl(url, fetchImpl));
+}
+
+async function fetchWithUrl(url: string, fetchImpl: typeof fetch, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetchImpl(url, init);
+  } catch (error) {
+    throw new Error(`API request failed before response: ${url}: ${readFetchError(error)}`);
+  }
+}
+
+function readFetchError(error: unknown): string {
+  return error instanceof Error ? error.message : "Unknown fetch error";
 }
 
 async function readResponse<T>(response: Response): Promise<T> {

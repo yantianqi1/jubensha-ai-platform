@@ -23,4 +23,16 @@ describe("API client", () => {
     expect(requests[0]?.url).toBe("http://127.0.0.1:3001/generation/rooms/room_1/npc/butler/ask");
     expect(JSON.parse(String(requests[0]?.body))).toEqual({ message: "你在哪里？" });
   });
+  it("includes request URL when fetch fails before a response", async () => {
+    const client = createApiClient("http://127.0.0.1:3001", {
+      fetch: async () => {
+        throw new TypeError("Failed to fetch");
+      },
+    });
+
+    await expect(client.startFogHarborDemo()).rejects.toThrow(
+      "API request failed before response: http://127.0.0.1:3001/demo/fog-harbor: Failed to fetch",
+    );
+  });
+
 });
