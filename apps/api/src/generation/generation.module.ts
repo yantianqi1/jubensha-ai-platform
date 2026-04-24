@@ -6,7 +6,7 @@ import { RuntimeService } from "../runtime/runtime-service.js";
 import { GenerationController } from "./generation.controller.js";
 import { GenerationService } from "./generation-service.js";
 import type { ModelProvider } from "./model-provider.js";
-import { createDemoModelProviderFromEnv } from "./scripted-demo-model-provider.js";
+import { createModelProviderFromEnv } from "./openai-compatible-model-provider.js";
 import { MODEL_PROVIDER } from "./generation.tokens.js";
 
 @Module({
@@ -15,7 +15,7 @@ import { MODEL_PROVIDER } from "./generation.tokens.js";
   providers: [
     {
       provide: MODEL_PROVIDER,
-      useFactory: () => createDemoModelProviderFromEnv(process.env),
+      useFactory: () => createModelProviderFromEnv(process.env),
     },
     {
       provide: GenerationService,

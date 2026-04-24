@@ -1,3 +1,6 @@
+import { loadEnv } from "./load-env.js";
+
+loadEnv();
 import { createPostgresPool, readDatabaseUrl } from "./content/content-database.js";
 import { ensureContentSchema } from "./content/postgres-content-schema.js";
 import { ensureRuntimeSchema } from "./runtime/postgres-runtime-schema.js";

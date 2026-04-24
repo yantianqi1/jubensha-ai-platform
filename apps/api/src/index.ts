@@ -37,3 +37,4 @@ export * from "./generation/generation.module.js";
 export * from "./generation/generation.tokens.js";
 export * from "./shadow/shadow-validation.js";
 export * from "./generation/scripted-demo-model-provider.js";
+export * from "./generation/openai-compatible-model-provider.js";

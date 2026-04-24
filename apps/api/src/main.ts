@@ -1,3 +1,6 @@
+import { loadEnv } from "./load-env.js";
+
+loadEnv();
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module.js";
