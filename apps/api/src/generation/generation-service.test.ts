@@ -21,7 +21,15 @@ const scriptPackage: ScriptPackage = {
       private_secret: "他藏起了钥匙。",
     },
   ],
-  clues: [],
+  clues: [
+    {
+      clue_code: "C-01",
+      title: "窗台划痕",
+      content: "窗台上有一道新鲜划痕。",
+      initial_visibility: [{ kind: "public", value: "all" }],
+      unlock_if: [],
+    },
+  ],
   scenes: [
     {
       scene_code: "act1",
@@ -36,7 +44,7 @@ const scriptPackage: ScriptPackage = {
 };
 
 const state: RuntimeState = {
-  flags: {},
+  flags: { pressure_high: false },
   inventory: [],
   revealedClues: [],
   timerExpired: false,
@@ -87,6 +95,33 @@ describe("GenerationService", () => {
 
     expect(response.speech).toBe("我看见窗台有痕迹。");
     expect(response.proposals).toEqual([]);
+    expect(response.shadowValidation).toEqual({ accepted: true, results: [] });
+  });
+
+
+  it("attaches shadow validation without mutating runtime state", async () => {
+    const service = createService({
+      provider: new CapturingProvider(
+        JSON.stringify({
+          speech: "窗台确实有痕迹。",
+          confidence: 0.9,
+          proposals: [{ type: "reveal_clue", clue_code: "C-01", reason: "玩家问到窗台" }],
+        }),
+      ),
+    });
+
+    const response = await service.askNpc({
+      roomId: "room_1",
+      npcCode: "butler",
+      message: "窗台怎么回事？",
+    });
+
+    expect(response.shadowValidation.accepted).toBe(true);
+    expect(response.shadowValidation.results[0]).toMatchObject({
+      accepted: true,
+      code: "accepted",
+    });
+    expect(room.state.revealedClues).toEqual([]);
   });
 
   it("surfaces provider schema failure as generation validation error", async () => {

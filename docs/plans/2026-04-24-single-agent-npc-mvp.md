@@ -10,12 +10,24 @@
 
 ---
 
+## Implementation Status
+
+All planned tasks in this document are now implemented and verified in commit `c0d80a9`, and the runtime response now includes `shadowValidation` from the W9-W10 visibility / shadow-log slice.
+
+- `apps/api/src/generation/npc-response-schema.ts` adds the NPC response contract.
+- `apps/api/src/generation/model-provider.ts` and `apps/api/src/generation/generation-errors.ts` define the provider boundary and validation errors.
+- `apps/api/src/generation/npc-prompt-builder.ts` builds deterministic NPC prompts from room state and script content.
+- `apps/api/src/generation/generation-service.ts` orchestrates room lookup, version lookup, prompt building, provider invocation, and response parsing.
+- `apps/api/src/generation/generation.controller.ts` and `apps/api/src/generation/generation.module.ts` expose the HTTP route and wire the module into `AppModule`.
+- `pnpm --filter @jubensha/api test -- src/generation`, `pnpm --filter @jubensha/api typecheck`, `pnpm test`, `pnpm --filter @jubensha/dsl typecheck`, and `pnpm build` all pass.
+
 ## Current Baseline
 
-As of 2026-04-24, the foundation work is locally verified:
+As of 2026-04-24, the foundation work is locally verified and the single-agent NPC slice is complete:
 
 - `@jubensha/dsl` exposes Scene DSL schema, condition/action/effect runtime evaluation, ScriptPackage parsing, and package reference diagnostics.
 - `@jubensha/api` exposes content draft/version CRUD, immutable publish flow, runtime room creation/action/replay, NestJS HTTP controllers, PostgreSQL repositories, and demo startup endpoints.
+- `@jubensha/api` also exposes the first NPC generation boundary for prompt construction, provider validation, response parsing, shadow validation, and HTTP entrypoints.
 - `pnpm test` passes with PostgreSQL integration tests skipped unless a database URL is present.
 - `pnpm --filter @jubensha/dsl typecheck`, `pnpm --filter @jubensha/api typecheck`, and `pnpm build` pass.
 
@@ -228,4 +240,3 @@ Expected: all pass.
 Run: `git status --short`
 
 Expected: only intended generation files, `apps/api/src/app.module.ts`, `apps/api/src/index.ts`, and this plan are changed beyond existing foundation files.
-

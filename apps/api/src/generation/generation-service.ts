@@ -2,6 +2,8 @@ import { buildNpcPrompt } from "./npc-prompt-builder.js";
 import { parseProviderNpcResponse } from "./generation-errors.js";
 import type { NpcResponse } from "./npc-response-schema.js";
 import type { ModelProvider } from "./model-provider.js";
+import type { NpcShadowValidation } from "../shadow/shadow-validation.js";
+import { validateNpcProposals } from "../shadow/shadow-validation.js";
 import type { ScriptVersionRecord } from "../content/content-repository.js";
 import type { RuntimeRoomRecord } from "../runtime/runtime-repository.js";
 
@@ -19,6 +21,10 @@ export interface AskNpcInput {
   readonly message: string;
 }
 
+export interface GenerationNpcResponse extends NpcResponse {
+  readonly shadowValidation: NpcShadowValidation;
+}
+
 export interface GenerationServiceOptions {
   readonly runtimeReader: GenerationRoomReader;
   readonly versionReader: ReleasedVersionReader;
@@ -28,7 +34,7 @@ export interface GenerationServiceOptions {
 export class GenerationService {
   constructor(private readonly options: GenerationServiceOptions) {}
 
-  async askNpc(input: AskNpcInput): Promise<NpcResponse> {
+  async askNpc(input: AskNpcInput): Promise<GenerationNpcResponse> {
     const room = await this.options.runtimeReader.getRoom(input.roomId);
     const version = await this.options.versionReader.getReleasedVersion(room.versionId);
     const prompt = buildNpcPrompt({
@@ -38,8 +44,16 @@ export class GenerationService {
       npcCode: input.npcCode,
       playerMessage: input.message,
     });
-    const output = await this.options.modelProvider.completeJson(prompt);
+    const response = parseProviderNpcResponse(await this.options.modelProvider.completeJson(prompt));
 
-    return parseProviderNpcResponse(output);
+    return {
+      ...response,
+      shadowValidation: validateNpcProposals({
+        scriptPackage: version.content,
+        state: room.state,
+        npcCode: input.npcCode,
+        proposals: response.proposals,
+      }),
+    };
   }
 }

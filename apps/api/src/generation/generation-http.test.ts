@@ -42,7 +42,12 @@ describe("Generation HTTP entrypoints", () => {
       npcCode: "butler",
       message: "你昨晚在哪里？",
     });
-    expect(response).toEqual({ speech: "我在厨房。", confidence: 0.8, proposals: [] });
+    expect(response).toEqual({
+      speech: "我在厨房。",
+      confidence: 0.8,
+      proposals: [],
+      shadowValidation: { accepted: true, results: [] },
+    });
   });
 
   it("rejects invalid request bodies", () => {
@@ -87,7 +92,12 @@ class CapturingGenerationService {
 
   async askNpc(input: AskNpcInput) {
     this.lastInput = input;
-    return { speech: "我在厨房。", confidence: 0.8, proposals: [] };
+    return {
+      speech: "我在厨房。",
+      confidence: 0.8,
+      proposals: [],
+      shadowValidation: { accepted: true, results: [] },
+    };
   }
 }
 

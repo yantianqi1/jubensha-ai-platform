@@ -35,3 +35,4 @@ export * from "./generation/generation.controller.js";
 export * from "./generation/generation-http-error.filter.js";
 export * from "./generation/generation.module.js";
 export * from "./generation/generation.tokens.js";
+export * from "./shadow/shadow-validation.js";
