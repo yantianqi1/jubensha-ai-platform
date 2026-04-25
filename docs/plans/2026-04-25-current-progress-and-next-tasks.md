@@ -11,7 +11,9 @@ The project has moved from demo-grade into a usable alpha slice. The current loc
 - Product surfaces for `studio-web`, `play-web`, and `admin-web`.
 - Studio generation, retry/diff display, StoryBible draft compilation, and Admin package-id handoff.
 - Admin publish review, blocker display, golden regression display, asset job inspection, explicit asset job execution, and explicit semver publish action.
+- Generation jobs now have durable records, explicit run/read endpoints, and event projection for Studio inspection.
 - Runtime rooms, deterministic seats, seat join, public/seat/admin snapshots, revision-aware actions, replay, and Postgres-backed room state.
+- Runtime event envelopes and SSE route metadata exist for cursor-based reconnect reads.
 - Web Play controls for room creation, seat join, public snapshot, seat-private snapshot, and revision-aware action submission.
 - API contract metadata, request logging, CI workflow, and release checklist with Usable Alpha smoke checks.
 
@@ -28,6 +30,10 @@ The project has moved from demo-grade into a usable alpha slice. The current loc
 Completed in the latest implementation batch:
 - Admin gained an explicit publish action with semver input and structured publish result/error display.
 - Asset jobs gained explicit run support, running/completed/failed states, and an unconfigured provider that fails explicitly instead of pretending success.
+- Asset jobs can use an OpenAI-compatible image provider when `THEME_ASSET_PROVIDER=openai-compatible` is configured.
+- Publish, asset execution, seat join, and runtime action mutations now require explicit operator/player identity headers.
+- Request logs include explicit operator/player ids when supplied, preparing the audit trail foundation.
+- Audit events now persist production-critical actions and expose target-scoped reads through `/audit/events`.
 - Web API client gained `publishDraft`, `createRuntimeRoom`, `applyRoomAction`, and asset job run helpers.
 - Play gained browser workflows for room creation, seat join, scoped snapshot reads, and revision-aware action submission.
 - API contract metadata now includes publish review, theme asset compile, demo, NPC ask, and asset job run routes.
@@ -36,14 +42,14 @@ Completed in the latest implementation batch:
 ## Remaining Gaps For Next Stage
 
 ### Asset Pipeline
-- Asset jobs can now run explicitly, but the default provider is still unconfigured.
-- A real image/asset provider must be wired in before the pipeline can produce useful generated assets.
-- Admin can inspect provider failures and generated references, but the provider itself still needs integration.
+- Asset jobs can now run explicitly and call a configured OpenAI-compatible image endpoint.
+- The default provider remains explicitly unconfigured until environment variables are set.
+- Admin can inspect provider failures and generated references; generated asset persistence is still in-memory job state.
 
 ### Live Runtime
 - Runtime snapshots and revision checks are stable enough for live transport planning.
-- No SSE/WebSocket transport exists yet.
-- Play UI still requires manual snapshot refresh and does not show live event delivery.
+- Initial runtime SSE event projection exists, with cursor filtering over room event history.
+- Play UI still requires manual snapshot refresh and does not consume live event delivery yet.
 
 ### Play Product Loop
 - Play can create/join/read/act, but turn/phase progression is still low-level.
@@ -51,16 +57,16 @@ Completed in the latest implementation batch:
 - Runtime action UX needs clearer conflict recovery and current-revision refresh.
 
 ### Governance And Accounts
-- No authentication, operator/player identity boundary, or admin role model exists.
-- Admin actions are explicit but not protected by auth/RBAC yet.
-- Audit logs exist as runtime events/request logs, but not as a product-level admin audit trail.
+- A minimal beta identity boundary exists through explicit `x-operator-id` and `x-player-id` headers.
+- This is not full authentication/RBAC; signed sessions and admin role management remain future work.
+- Product-level audit records exist for publish attempts, asset job execution, seat join, and runtime actions.
 
 ## Suggested Next Tasks
 
-1. Configure a real image provider behind `ThemeAssetProvider` once credentials and provider choice are agreed.
-2. Add transport-neutral runtime event stream shape, then SSE as the first live delivery path.
-3. Upgrade Play UI into a guided player loop using scoped snapshots and revision refresh.
-4. Add minimal operator/player identity boundaries before broader sharing.
+1. Persist asset job records and generated references beyond the in-memory job store.
+2. Upgrade Play UI to consume runtime SSE events and recover from stale revisions automatically.
+3. Extend audit coverage to NPC generation and generation job execution, then add Admin audit inspection UI.
+4. Replace beta identity headers with signed sessions or a deliberate auth provider.
 5. Keep running `pnpm test`, `pnpm typecheck`, and `pnpm build` after each batch.
 
 ## Working Files To Watch
