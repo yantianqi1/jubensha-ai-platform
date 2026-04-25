@@ -11,3 +11,10 @@ export class RuntimeRuleError extends Error {
     this.name = "RuntimeRuleError";
   }
 }
+
+export class RuntimeConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RuntimeConflictError";
+  }
+}

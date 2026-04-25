@@ -12,6 +12,7 @@ import {
   type ContentIdGenerator,
 } from "./content-id-generator.js";
 import { PostgresContentRepository } from "./postgres-content-repository.js";
+import { PublishGate } from "./publish-gate.js";
 import {
   CONTENT_ID_GENERATOR,
   CONTENT_REPOSITORY,
@@ -21,6 +22,7 @@ import {
 @Module({
   controllers: [ContentController],
   providers: [
+    PublishGate,
     {
       provide: DATABASE_POOL,
       useFactory: () => createPostgresPool(readDatabaseUrl()),
@@ -36,14 +38,16 @@ import {
     },
     {
       provide: ContentService,
-      inject: [CONTENT_REPOSITORY, CONTENT_ID_GENERATOR],
+      inject: [CONTENT_REPOSITORY, CONTENT_ID_GENERATOR, PublishGate],
       useFactory: (
         repository: ContentRepository,
         idGenerator: ContentIdGenerator,
+        publishGate: PublishGate,
       ) =>
         new ContentService({
           repository,
           idGenerator,
+          publishGate,
         }),
     },
   ],

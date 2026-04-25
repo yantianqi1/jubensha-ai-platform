@@ -31,9 +31,33 @@ export class RuntimeController {
     return this.runtimeService.getRoom(roomId);
   }
 
+  @Post("rooms/:roomId/seats/:seatId/join")
+  joinSeat(
+    @Param("roomId") roomId: string,
+    @Param("seatId") seatId: string,
+    @Body() body: unknown,
+  ) {
+    return this.runtimeService.joinSeat(roomId, readJoinSeatInput(seatId, body));
+  }
+
+  @Get("rooms/:roomId/snapshot")
+  getPublicSnapshot(@Param("roomId") roomId: string) {
+    return this.runtimeService.getPublicSnapshot(roomId);
+  }
+
+  @Get("rooms/:roomId/seats/:seatId/snapshot")
+  getSeatSnapshot(@Param("roomId") roomId: string, @Param("seatId") seatId: string) {
+    return this.runtimeService.getSeatSnapshot(roomId, seatId);
+  }
+
+  @Get("rooms/:roomId/admin-snapshot")
+  getAdminSnapshot(@Param("roomId") roomId: string) {
+    return this.runtimeService.getAdminSnapshot(roomId);
+  }
+
   @Post("rooms/:roomId/actions")
   applyRoomAction(@Param("roomId") roomId: string, @Body() body: unknown) {
-    return this.runtimeService.applyRoomAction(roomId, readActionCode(body));
+    return this.runtimeService.applyRoomAction(roomId, readActionInput(body));
   }
 
   @Post("rooms/:roomId/replay")
@@ -56,12 +80,31 @@ function readCreateRoomInput(body: unknown) {
   return { versionId: body.versionId, seatCount };
 }
 
-function readActionCode(body: unknown): string {
+function readJoinSeatInput(seatId: string, body: unknown) {
+  if (!isObjectRecord(body) || typeof body.playerId !== "string") {
+    throw new BadRequestException("playerId is required");
+  }
+
+  return { seatId, playerId: body.playerId };
+}
+
+function readActionInput(body: unknown) {
   if (!isObjectRecord(body) || typeof body.actionCode !== "string") {
     throw new BadRequestException("actionCode is required");
   }
 
-  return body.actionCode;
+  return {
+    actionCode: body.actionCode,
+    expectedRevision: readExpectedRevision(body.expectedRevision),
+  };
+}
+
+function readExpectedRevision(value: unknown): number {
+  if (typeof value !== "number" || !Number.isInteger(value)) {
+    throw new BadRequestException("expectedRevision is required");
+  }
+
+  return value;
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {

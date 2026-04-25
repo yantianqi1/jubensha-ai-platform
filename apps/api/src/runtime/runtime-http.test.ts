@@ -27,6 +27,10 @@ const ROOM_PATH = "rooms";
 const ROOM_DETAIL_PATH = "rooms/:roomId";
 const ROOM_ACTION_PATH = "rooms/:roomId/actions";
 const ROOM_REPLAY_PATH = "rooms/:roomId/replay";
+const ROOM_JOIN_PATH = "rooms/:roomId/seats/:seatId/join";
+const ROOM_PUBLIC_SNAPSHOT_PATH = "rooms/:roomId/snapshot";
+const ROOM_SEAT_SNAPSHOT_PATH = "rooms/:roomId/seats/:seatId/snapshot";
+const ROOM_ADMIN_SNAPSHOT_PATH = "rooms/:roomId/admin-snapshot";
 
 const releasedVersion: ScriptVersionRecord = {
   id: "ver_1",
@@ -42,6 +46,17 @@ const releasedVersion: ScriptVersionRecord = {
         role_code: "detective",
         name: "侦探",
         public_profile: "受邀调查雾港宅邸失踪案。",
+        private_secret: "知道港口账本藏在窗台夹层。",
+      },
+      {
+        role_code: "doctor",
+        name: "医生",
+        public_profile: "曾为失踪者做过诊疗。",
+      },
+      {
+        role_code: "butler",
+        name: "管家",
+        public_profile: "管理雾港宅邸多年。",
       },
     ],
     clues: [
@@ -50,6 +65,13 @@ const releasedVersion: ScriptVersionRecord = {
         title: "窗台划痕",
         content: "窗台上有一道新鲜划痕。",
         initial_visibility: [{ kind: "public", value: "all" }],
+        unlock_if: [],
+      },
+      {
+        clue_code: "C-02",
+        title: "私藏账本",
+        content: "账本记录了秘密付款。",
+        initial_visibility: [{ kind: "role", value: "detective" }],
         unlock_if: [],
       },
     ],
@@ -106,6 +128,10 @@ describe("Runtime HTTP entrypoints", () => {
     expectRoute("createRoom", ROOM_PATH, RequestMethod.POST);
     expectRoute("listRooms", ROOM_PATH, RequestMethod.GET);
     expectRoute("getRoom", ROOM_DETAIL_PATH, RequestMethod.GET);
+    expectRoute("joinSeat", ROOM_JOIN_PATH, RequestMethod.POST);
+    expectRoute("getPublicSnapshot", ROOM_PUBLIC_SNAPSHOT_PATH, RequestMethod.GET);
+    expectRoute("getSeatSnapshot", ROOM_SEAT_SNAPSHOT_PATH, RequestMethod.GET);
+    expectRoute("getAdminSnapshot", ROOM_ADMIN_SNAPSHOT_PATH, RequestMethod.GET);
     expectRoute("applyRoomAction", ROOM_ACTION_PATH, RequestMethod.POST);
     expectRoute("replayRoom", ROOM_REPLAY_PATH, RequestMethod.POST);
   });
@@ -124,10 +150,27 @@ describe("Runtime HTTP entrypoints", () => {
     await expect(controller.listRooms()).resolves.toEqual([created]);
   });
 
+
+  it("joins seats and exposes scoped snapshots", async () => {
+    await controller.createRoom({ versionId: "ver_1", seatCount: 3 });
+
+    const joined = await controller.joinSeat("room_1", "seat_1", { playerId: "player_a" });
+    const publicSnapshot = await controller.getPublicSnapshot("room_1");
+    const seatSnapshot = await controller.getSeatSnapshot("room_1", "seat_1");
+    const adminSnapshot = await controller.getAdminSnapshot("room_1");
+
+    expect(joined.revision).toBe(1);
+    expect(publicSnapshot.visibleClues.map((clue) => clue.clueCode)).toEqual(["C-01"]);
+    expect(JSON.stringify(publicSnapshot)).not.toContain("账本藏在窗台");
+    expect(seatSnapshot.privateRole.privateSecret).toBe("知道港口账本藏在窗台夹层。");
+    expect(seatSnapshot.visibleClues.map((clue) => clue.clueCode)).toEqual(["C-01", "C-02"]);
+    expect(adminSnapshot.seats[0].playerId).toBe("player_a");
+  });
+
   it("applies a room action", async () => {
     await controller.createRoom({ versionId: "ver_1", seatCount: 3 });
 
-    const room = await controller.applyRoomAction("room_1", { actionCode: "inspect_window" });
+    const room = await controller.applyRoomAction("room_1", { actionCode: "inspect_window", expectedRevision: 0 });
 
     expect(room.state.revealedClues).toEqual(["C-01"]);
     expect(room.events).toHaveLength(1);
@@ -135,7 +178,7 @@ describe("Runtime HTTP entrypoints", () => {
 
   it("replays a runtime room", async () => {
     await controller.createRoom({ versionId: "ver_1", seatCount: 3 });
-    await controller.applyRoomAction("room_1", { actionCode: "inspect_window" });
+    await controller.applyRoomAction("room_1", { actionCode: "inspect_window", expectedRevision: 0 });
 
     const room = await controller.replayRoom("room_1");
 

@@ -7,17 +7,18 @@ import {
 import {
   ContentConflictError,
   ContentNotFoundError,
+  ContentPublishBlockedError,
   ContentValidationError,
 } from "./content-errors.js";
 
-type ContentHttpError = ContentConflictError | ContentNotFoundError | ContentValidationError;
+type ContentHttpError = ContentConflictError | ContentNotFoundError | ContentPublishBlockedError | ContentValidationError;
 type JsonResponse = {
   readonly status: (statusCode: number) => {
     readonly json: (body: unknown) => void;
   };
 };
 
-@Catch(ContentConflictError, ContentNotFoundError, ContentValidationError)
+@Catch(ContentConflictError, ContentNotFoundError, ContentPublishBlockedError, ContentValidationError)
 export class ContentHttpErrorFilter implements ExceptionFilter<ContentHttpError> {
   catch(exception: ContentHttpError, host: ArgumentsHost): void {
     const response = host.switchToHttp().getResponse<JsonResponse>();
@@ -34,6 +35,10 @@ function statusForError(error: ContentHttpError): number {
     return HttpStatus.CONFLICT;
   }
 
+  if (error instanceof ContentPublishBlockedError) {
+    return HttpStatus.CONFLICT;
+  }
+
   return HttpStatus.NOT_FOUND;
 }
 
@@ -47,6 +52,13 @@ function bodyForError(error: ContentHttpError): Record<string, unknown> {
     return {
       ...body,
       diagnostics: error.diagnostics,
+    };
+  }
+
+  if (error instanceof ContentPublishBlockedError) {
+    return {
+      ...body,
+      blockers: error.blockers,
     };
   }
 

@@ -6,6 +6,14 @@ export interface RuntimeEventRecord {
   readonly sceneCode: string;
 }
 
+export interface RuntimeSeatRecord {
+  readonly seatId: string;
+  readonly roleCode: string;
+  readonly playerId: string | null;
+  readonly connected: boolean;
+  readonly lastSeenAt: string | null;
+}
+
 export interface RuntimeRoomRecord {
   readonly id: string;
   readonly versionId: string;
@@ -13,6 +21,8 @@ export interface RuntimeRoomRecord {
   readonly currentSceneCode: string;
   readonly state: RuntimeState;
   readonly events: readonly RuntimeEventRecord[];
+  readonly seats: readonly RuntimeSeatRecord[];
+  readonly revision: number;
 }
 
 export interface RuntimeRepository {

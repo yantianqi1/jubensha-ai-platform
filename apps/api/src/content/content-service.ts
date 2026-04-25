@@ -6,6 +6,7 @@ import {
 import {
   ContentConflictError,
   ContentNotFoundError,
+  ContentPublishBlockedError,
   ContentValidationError,
 } from "./content-errors.js";
 import type {
@@ -14,19 +15,23 @@ import type {
   ScriptVersionRecord,
 } from "./content-repository.js";
 import type { ContentIdGenerator } from "./content-id-generator.js";
+import type { PublishGate } from "./publish-gate.js";
 
 export interface ContentServiceOptions {
   readonly repository: ContentRepository;
   readonly idGenerator: ContentIdGenerator;
+  readonly publishGate: PublishGate;
 }
 
 export class ContentService {
   private readonly repository: ContentRepository;
   private readonly idGenerator: ContentIdGenerator;
+  private readonly publishGate: PublishGate;
 
   constructor(options: ContentServiceOptions) {
     this.repository = options.repository;
     this.idGenerator = options.idGenerator;
+    this.publishGate = options.publishGate;
   }
 
   async createDraftPackage(input: unknown): Promise<ScriptPackageRecord> {
@@ -74,6 +79,12 @@ export class ContentService {
       status: "released",
       semver,
     });
+    const publishReview = this.publishGate.review(content);
+
+    if (!publishReview.allowed) {
+      throw new ContentPublishBlockedError("Draft package failed publish gate", publishReview.blockers);
+    }
+
     const version: ScriptVersionRecord = {
       id: this.idGenerator("version"),
       semver,

@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   ContentConflictError,
   ContentNotFoundError,
+  ContentPublishBlockedError,
   ContentValidationError,
 } from "./content-errors.js";
 import { ContentService } from "./content-service.js";
 import { InMemoryContentRepository } from "./in-memory-content-repository.js";
+import { PublishGate } from "./publish-gate.js";
 
 const validPackageInput = {
   package_code: "fog_harbor",
@@ -27,6 +29,7 @@ const validPackageInput = {
       unlock_if: [],
     },
   ],
+  meta: { summary: "用于发布测试。", tags: [], player_count: 1, truth: "窗台划痕揭示真相。" },
   scenes: [
     {
       scene_code: "act1",
@@ -50,6 +53,7 @@ function createService(): ContentService {
   return new ContentService({
     repository: new InMemoryContentRepository(),
     idGenerator: (kind) => `${kind}-id-1`,
+    publishGate: new PublishGate(),
   });
 }
 
@@ -122,6 +126,17 @@ describe("ContentService", () => {
     expect(version.semver).toBe("1.0.0");
     expect(version.state).toBe("released");
     expect(stored.releasedVersions).toEqual([version]);
+  });
+
+
+  it("blocks publishing drafts with quality blockers", async () => {
+    const service = createService();
+    await service.createDraftPackage({ ...validPackageInput, meta: undefined });
+
+    await expect(service.publishDraft("package-id-1", "1.0.0")).rejects.toMatchObject({
+      name: "ContentPublishBlockedError",
+      blockers: [{ code: "not_evaluable", path: "meta.truth" }],
+    });
   });
 
   it("updates draft package content without changing released versions", async () => {

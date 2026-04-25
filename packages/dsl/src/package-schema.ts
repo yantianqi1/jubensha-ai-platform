@@ -35,6 +35,7 @@ export const ScriptPackageSchema = z
         summary: z.string().optional(),
         tags: z.array(z.string()).default([]),
         player_count: z.number().int().positive().optional(),
+        truth: z.string().min(1).optional(),
       })
       .optional(),
   })

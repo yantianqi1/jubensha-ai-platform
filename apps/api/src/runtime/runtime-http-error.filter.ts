@@ -5,18 +5,19 @@ import {
   HttpStatus,
 } from "@nestjs/common";
 import {
+  RuntimeConflictError,
   RuntimeNotFoundError,
   RuntimeRuleError,
 } from "./runtime-errors.js";
 
-type RuntimeHttpError = RuntimeNotFoundError | RuntimeRuleError;
+type RuntimeHttpError = RuntimeConflictError | RuntimeNotFoundError | RuntimeRuleError;
 type JsonResponse = {
   readonly status: (statusCode: number) => {
     readonly json: (body: unknown) => void;
   };
 };
 
-@Catch(RuntimeNotFoundError, RuntimeRuleError)
+@Catch(RuntimeConflictError, RuntimeNotFoundError, RuntimeRuleError)
 export class RuntimeHttpErrorFilter implements ExceptionFilter<RuntimeHttpError> {
   catch(exception: RuntimeHttpError, host: ArgumentsHost): void {
     const response = host.switchToHttp().getResponse<JsonResponse>();
@@ -28,9 +29,9 @@ export class RuntimeHttpErrorFilter implements ExceptionFilter<RuntimeHttpError>
 }
 
 function statusForError(error: RuntimeHttpError): number {
-  if (error instanceof RuntimeRuleError) {
-    return HttpStatus.CONFLICT;
+  if (error instanceof RuntimeNotFoundError) {
+    return HttpStatus.NOT_FOUND;
   }
 
-  return HttpStatus.NOT_FOUND;
+  return HttpStatus.CONFLICT;
 }

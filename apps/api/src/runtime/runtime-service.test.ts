@@ -20,6 +20,16 @@ const releasedVersion: ScriptVersionRecord = {
         name: "侦探",
         public_profile: "受邀调查雾港宅邸失踪案。",
       },
+      {
+        role_code: "doctor",
+        name: "医生",
+        public_profile: "曾为失踪者做过诊疗。",
+      },
+      {
+        role_code: "butler",
+        name: "管家",
+        public_profile: "管理雾港宅邸多年。",
+      },
     ],
     clues: [
       {
@@ -93,7 +103,7 @@ describe("RuntimeService", () => {
     const service = createService();
     await service.createRoom({ versionId: "ver_1", seatCount: 3 });
 
-    const room = await service.applyRoomAction("room_1", "inspect_window");
+    const room = await service.applyRoomAction("room_1", { actionCode: "inspect_window", expectedRevision: 0 });
 
     expect(room.state.revealedClues).toEqual(["C-01"]);
     expect(room.events).toEqual([
@@ -109,7 +119,7 @@ describe("RuntimeService", () => {
     const repository = new InMemoryRuntimeRepository();
     const service = createService(releasedVersion, repository);
     const created = await service.createRoom({ versionId: "ver_1", seatCount: 3 });
-    const applied = await service.applyRoomAction("room_1", "inspect_window");
+    const applied = await service.applyRoomAction("room_1", { actionCode: "inspect_window", expectedRevision: 0 });
 
     await repository.saveRoom({ ...applied, state: created.state });
 
@@ -123,7 +133,7 @@ describe("RuntimeService", () => {
     const service = createService();
     await service.createRoom({ versionId: "ver_1", seatCount: 3 });
 
-    await expect(service.applyRoomAction("room_1", "call_vote")).rejects.toBeInstanceOf(
+    await expect(service.applyRoomAction("room_1", { actionCode: "call_vote", expectedRevision: 0 })).rejects.toBeInstanceOf(
       RuntimeRuleError,
     );
   });

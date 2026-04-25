@@ -8,9 +8,17 @@ CREATE TABLE IF NOT EXISTS runtime_rooms (
   current_scene_code text NOT NULL,
   state jsonb NOT NULL,
   events jsonb NOT NULL,
+  seats jsonb NOT NULL DEFAULT '[]'::jsonb,
+  revision integer NOT NULL DEFAULT 0,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+ALTER TABLE runtime_rooms
+  ADD COLUMN IF NOT EXISTS seats jsonb NOT NULL DEFAULT '[]'::jsonb;
+
+ALTER TABLE runtime_rooms
+  ADD COLUMN IF NOT EXISTS revision integer NOT NULL DEFAULT 0;
 `;
 
 export async function ensureRuntimeSchema(client: Pool | PoolClient): Promise<void> {

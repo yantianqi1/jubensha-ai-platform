@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { ContentService } from "./content/content-service.js";
 import { createSequentialContentIdGenerator } from "./content/content-id-generator.js";
 import { InMemoryContentRepository } from "./content/in-memory-content-repository.js";
+import { PublishGate } from "./content/publish-gate.js";
 import { DemoController } from "./demo/demo.controller.js";
 import { HealthController } from "./health/health.controller.js";
 import { HomeController } from "./home/home.controller.js";
@@ -20,6 +21,7 @@ describe("Application HTTP entrypoints", () => {
     const contentService = new ContentService({
       repository: new InMemoryContentRepository(),
       idGenerator: createSequentialContentIdGenerator(),
+      publishGate: new PublishGate(),
     });
     const runtimeService = new RuntimeService({
       repository: new InMemoryRuntimeRepository(),

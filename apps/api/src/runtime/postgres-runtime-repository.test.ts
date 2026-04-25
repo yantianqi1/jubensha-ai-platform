@@ -25,6 +25,10 @@ const roomRecord: RuntimeRoomRecord = {
     scores: { team: {}, role: {}, seat: {} },
   },
   events: [],
+  seats: [
+    { seatId: "seat_1", roleCode: "detective", playerId: null, connected: false, lastSeenAt: null },
+  ],
+  revision: 0,
 };
 
 describeDatabase("PostgresRuntimeRepository", () => {
@@ -65,6 +69,7 @@ describeDatabase("PostgresRuntimeRepository", () => {
       ...roomRecord,
       state: { ...roomRecord.state, revealedClues: ["C-01"] },
       events: [{ type: "action_applied", actionCode: "inspect_window", sceneCode: "act1" }],
+      revision: 1,
     };
 
     await repository.saveRoom(roomRecord);

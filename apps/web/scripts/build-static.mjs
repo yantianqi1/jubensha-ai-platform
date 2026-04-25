@@ -9,7 +9,7 @@ const dist = resolve(root, "dist");
 await mkdir(dist, { recursive: true });
 await bundleBrowserApp(root, dist);
 await copyFile(resolve(root, "src/styles.css"), resolve(dist, "styles.css"));
-await writeFile(resolve(dist, "index.html"), await renderTemplate(root), "utf8");
+await writeStaticPages(root, dist);
 
 async function bundleBrowserApp(rootDir, distDir) {
   await build({
@@ -22,7 +22,18 @@ async function bundleBrowserApp(rootDir, distDir) {
   });
 }
 
-async function renderTemplate(rootDir) {
+async function writeStaticPages(rootDir, distDir) {
   const { renderDemoPage } = await import(resolve(rootDir, "dist/assets/main.js"));
-  return renderDemoPage();
+  const pages = [
+    { dir: ".", surface: "play-web" },
+    { dir: "play", surface: "play-web" },
+    { dir: "studio", surface: "studio-web" },
+    { dir: "admin", surface: "admin-web" },
+  ];
+
+  for (const page of pages) {
+    const pageDir = resolve(distDir, page.dir);
+    await mkdir(pageDir, { recursive: true });
+    await writeFile(resolve(pageDir, "index.html"), renderDemoPage(page.surface), "utf8");
+  }
 }

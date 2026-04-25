@@ -29,6 +29,12 @@ export const fogHarborDemoPackage = {
       unlock_if: [],
     },
   ],
+  meta: {
+    summary: "雾港宅邸失踪案 demo。",
+    tags: ["demo"],
+    player_count: 3,
+    truth: "窗台划痕揭示昨夜闯入者与管家的隐瞒。",
+  },
   scenes: [
     {
       scene_code: "act1",

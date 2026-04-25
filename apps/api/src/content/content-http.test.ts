@@ -10,7 +10,7 @@ import {
 import { Test } from "@nestjs/testing";
 import { beforeEach, describe, expect, it } from "vitest";
 import { ContentController } from "./content.controller.js";
-import { ContentValidationError } from "./content-errors.js";
+import { ContentPublishBlockedError, ContentValidationError } from "./content-errors.js";
 import { ContentHttpErrorFilter } from "./content-http-error.filter.js";
 import {
   createSequentialContentIdGenerator,
@@ -23,6 +23,7 @@ import {
   CONTENT_REPOSITORY,
 } from "./content.tokens.js";
 import { InMemoryContentRepository } from "./in-memory-content-repository.js";
+import { PublishGate } from "./publish-gate.js";
 
 const ROOT_PATH = "content";
 const PACKAGE_PATH = "packages";
@@ -51,6 +52,7 @@ const validPackageInput = {
       unlock_if: [],
     },
   ],
+  meta: { summary: "用于发布测试。", tags: [], player_count: 1, truth: "窗台划痕揭示真相。" },
   scenes: [
     {
       scene_code: "act1",
@@ -77,6 +79,7 @@ describe("Content HTTP entrypoints", () => {
     const moduleRef = await Test.createTestingModule({
       controllers: [ContentController],
       providers: [
+        PublishGate,
         {
           provide: CONTENT_REPOSITORY,
           useFactory: () => new InMemoryContentRepository(),
@@ -87,14 +90,16 @@ describe("Content HTTP entrypoints", () => {
         },
         {
           provide: ContentService,
-          inject: [CONTENT_REPOSITORY, CONTENT_ID_GENERATOR],
+          inject: [CONTENT_REPOSITORY, CONTENT_ID_GENERATOR, PublishGate],
           useFactory: (
             repository: ContentRepository,
             idGenerator: ContentIdGenerator,
+            publishGate: PublishGate,
           ) =>
             new ContentService({
               repository,
               idGenerator,
+              publishGate,
             }),
         },
       ],
@@ -172,6 +177,24 @@ describe("Content HTTP entrypoints", () => {
     const version = await controller.publishDraft(created.id, { semver: "1.0.0" });
 
     await expect(controller.getReleasedVersion(version.id)).resolves.toEqual(version);
+  });
+
+
+  it("maps publish blockers to conflict responses", () => {
+    const response = createJsonResponse();
+    const host = createArgumentsHost(response);
+    const error = new ContentPublishBlockedError("Draft package failed publish gate", [
+      { code: "not_evaluable", path: "meta.truth", message: "Missing truth metadata" },
+    ]);
+
+    new ContentHttpErrorFilter().catch(error, host);
+
+    expect(response.statusCode).toBe(HttpStatus.CONFLICT);
+    expect(response.body).toEqual({
+      error: "ContentPublishBlockedError",
+      message: "Draft package failed publish gate",
+      blockers: [{ code: "not_evaluable", path: "meta.truth", message: "Missing truth metadata" }],
+    });
   });
 
   it("maps validation errors to bad request responses", () => {

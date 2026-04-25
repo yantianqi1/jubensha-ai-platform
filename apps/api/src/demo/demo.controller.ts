@@ -18,10 +18,10 @@ export class DemoController {
       versionId: version.id,
       seatCount: 3,
     });
-    const roomAfterAction = await this.runtimeService.applyRoomAction(
-      room.id,
-      "inspect_window",
-    );
+    const roomAfterAction = await this.runtimeService.applyRoomAction(room.id, {
+      actionCode: "inspect_window",
+      expectedRevision: room.revision,
+    });
 
     return {
       packageId: scriptPackage.id,

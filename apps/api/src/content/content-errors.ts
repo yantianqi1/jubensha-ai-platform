@@ -23,3 +23,19 @@ export class ContentNotFoundError extends Error {
     this.name = "ContentNotFoundError";
   }
 }
+
+export interface ContentPublishBlocker {
+  readonly code: string;
+  readonly path: string;
+  readonly message: string;
+}
+
+export class ContentPublishBlockedError extends Error {
+  readonly blockers: readonly ContentPublishBlocker[];
+
+  constructor(message: string, blockers: readonly ContentPublishBlocker[]) {
+    super(message);
+    this.name = "ContentPublishBlockedError";
+    this.blockers = blockers;
+  }
+}
