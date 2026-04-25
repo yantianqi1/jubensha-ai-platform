@@ -24,6 +24,30 @@ describe("API client", () => {
     expect(JSON.parse(String(requests[0]?.body))).toEqual({ message: "你在哪里？" });
   });
 
+
+  it("creates and runs generation jobs", async () => {
+    const request = { premise: "雾港旧账", playerCount: 4 };
+    const requests: Array<RequestInit & { url: string }> = [];
+    const client = createApiClient("http://127.0.0.1:3001", {
+      fetch: async (url, init) => {
+        requests.push({ url, ...(init ?? {}) });
+        return new Response(JSON.stringify({ id: "generation_job_1", status: "queued", attempts: [] }), { status: 200 });
+      },
+    });
+
+    await client.createGenerationJob(request);
+    await client.runGenerationJob("generation_job_1");
+    await client.getGenerationJob("generation_job_1");
+
+    expect(requests.map((entry) => entry.url)).toEqual([
+      "http://127.0.0.1:3001/creation/generation-jobs",
+      "http://127.0.0.1:3001/creation/generation-jobs/generation_job_1/run",
+      "http://127.0.0.1:3001/creation/generation-jobs/generation_job_1",
+    ]);
+    expect(JSON.parse(String(requests[0]?.body))).toEqual(request);
+    expect(JSON.parse(String(requests[1]?.body))).toEqual({});
+  });
+
   it("builds story bible compile draft request payloads", async () => {
     const storyBible = { meta: { title: "雾港新案" } };
     const requests: Array<RequestInit & { url: string }> = [];
@@ -83,6 +107,7 @@ describe("API client", () => {
   it("runs theme asset jobs explicitly", async () => {
     const requests: Array<RequestInit & { url: string }> = [];
     const client = createApiClient("http://127.0.0.1:3001", {
+      operatorId: "operator_1",
       fetch: async (url, init) => {
         requests.push({ url, ...(init ?? {}) });
         return new Response(JSON.stringify({ id: "theme_asset_job_1", status: "running", requestedAssets: [] }), {
@@ -95,6 +120,7 @@ describe("API client", () => {
 
     expect(requests[0]?.url).toBe("http://127.0.0.1:3001/creation/theme-assets/jobs/theme_asset_job_1/run");
     expect(requests[0]?.method).toBe("POST");
+    expect(requests[0]?.headers).toMatchObject({ "x-operator-id": "operator_1" });
     expect(JSON.parse(String(requests[0]?.body))).toEqual({});
   });
 
@@ -136,6 +162,7 @@ describe("API client", () => {
   it("publishes draft packages with explicit semver", async () => {
     const requests: Array<RequestInit & { url: string }> = [];
     const client = createApiClient("http://127.0.0.1:3001", {
+      operatorId: "operator_1",
       fetch: async (url, init) => {
         requests.push({ url, ...(init ?? {}) });
         return new Response(JSON.stringify({ id: "version_1", semver: "1.0.0", state: "released" }), {
@@ -152,6 +179,7 @@ describe("API client", () => {
 
     expect(requests[0]?.url).toBe("http://127.0.0.1:3001/content/packages/pkg_1/publish");
     expect(requests[0]?.method).toBe("POST");
+    expect(requests[0]?.headers).toMatchObject({ "x-operator-id": "operator_1" });
     expect(JSON.parse(String(requests[0]?.body))).toEqual({ semver: "1.0.0" });
   });
 
@@ -159,6 +187,7 @@ describe("API client", () => {
   it("builds runtime room creation and revision-aware action payloads", async () => {
     const requests: Array<RequestInit & { url: string }> = [];
     const client = createApiClient("http://127.0.0.1:3001", {
+      playerId: "player_a",
       fetch: async (url, init) => {
         requests.push({ url, ...(init ?? {}) });
         return new Response(JSON.stringify({ id: "room_1", revision: 1, state: { phase: "open", revealedClues: [], npcEvents: [] } }), {
@@ -173,7 +202,25 @@ describe("API client", () => {
     expect(requests[0]?.url).toBe("http://127.0.0.1:3001/runtime/rooms");
     expect(JSON.parse(String(requests[0]?.body))).toEqual({ versionId: "version_1", seatCount: 4 });
     expect(requests[1]?.url).toBe("http://127.0.0.1:3001/runtime/rooms/room_1/actions");
+    expect(requests[1]?.headers).toMatchObject({ "x-player-id": "player_a" });
     expect(JSON.parse(String(requests[1]?.body))).toEqual({ actionCode: "inspect_window", expectedRevision: 1 });
+  });
+
+  it("sends matching player identity when joining a runtime seat", async () => {
+    const requests: Array<RequestInit & { url: string }> = [];
+    const client = createApiClient("http://127.0.0.1:3001", {
+      fetch: async (url, init) => {
+        requests.push({ url, ...(init ?? {}) });
+        return new Response(JSON.stringify({ id: "room_1", revision: 1, state: { phase: "open", revealedClues: [], npcEvents: [] } }), {
+          status: 200,
+        });
+      },
+    });
+
+    await client.joinSeat("room_1", "seat_1", "player_a");
+
+    expect(requests[0]?.headers).toMatchObject({ "x-player-id": "player_a" });
+    expect(JSON.parse(String(requests[0]?.body))).toEqual({ playerId: "player_a" });
   });
 
   it("reads runtime public and seat snapshots explicitly", async () => {

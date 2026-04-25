@@ -9,6 +9,7 @@ const dist = resolve(root, "dist");
 await mkdir(dist, { recursive: true });
 await bundleBrowserApp(root, dist);
 await copyFile(resolve(root, "src/styles.css"), resolve(dist, "styles.css"));
+await copyFile(resolve(root, "src/script-creation-job.css"), resolve(dist, "script-creation-job.css"));
 await writeStaticPages(root, dist);
 
 async function bundleBrowserApp(rootDir, distDir) {

@@ -7,6 +7,7 @@ import type {
   ApiRuntimeRoom,
   ApiRuntimeSnapshot,
   CompileStoryBibleDraftResult,
+  GenerationJob,
   PlayableDemoResult,
   PublishReviewSummary,
   ThemeAssetJob,
@@ -22,6 +23,7 @@ export type {
   ApiRuntimeSnapshot,
   ApiRuntimeState,
   CompileStoryBibleDraftResult,
+  GenerationJob,
   GoldenRegressionSummary,
   PlayableDemoResult,
   PublishReviewBlocker,
@@ -81,6 +83,7 @@ export class ApiClientError extends Error {
 export function createApiClient(baseUrl: string, options: ApiClientOptions = {}) {
   const normalizedBaseUrl = baseUrl.replace(/\/$/, "");
   const fetchImpl = options.fetch ?? fetch;
+  const identityHeaders = createIdentityHeaders(options);
 
   return {
     urls: {
@@ -91,6 +94,10 @@ export function createApiClient(baseUrl: string, options: ApiClientOptions = {})
       room: (roomId: string) => `${normalizedBaseUrl}/runtime/rooms/${roomId}`,
       runtimeRooms: () => `${normalizedBaseUrl}/runtime/rooms`,
       roomActions: (roomId: string) => `${normalizedBaseUrl}/runtime/rooms/${roomId}/actions`,
+      generationJobs: () => `${normalizedBaseUrl}/creation/generation-jobs`,
+      generationJob: (jobId: string) => `${normalizedBaseUrl}/creation/generation-jobs/${jobId}`,
+      runGenerationJob: (jobId: string) => `${normalizedBaseUrl}/creation/generation-jobs/${jobId}/run`,
+      generationJobEvents: (jobId: string) => `${normalizedBaseUrl}/creation/generation-jobs/${jobId}/events`,
       compileStoryBibleDraft: () => `${normalizedBaseUrl}/creation/story-bibles/compile-draft`,
       compileThemeAssets: () => `${normalizedBaseUrl}/creation/theme-assets/compile`,
       themeAssetJobs: () => `${normalizedBaseUrl}/creation/theme-assets/jobs`,
@@ -121,6 +128,7 @@ export function createApiClient(baseUrl: string, options: ApiClientOptions = {})
         `${normalizedBaseUrl}/runtime/rooms/${roomId}/seats/${seatId}/join`,
         { playerId },
         fetchImpl,
+        { "x-player-id": playerId },
       );
     },
     async getPublicSnapshot(roomId: string): Promise<ApiRuntimeSnapshot> {
@@ -141,7 +149,17 @@ export function createApiClient(baseUrl: string, options: ApiClientOptions = {})
         `${normalizedBaseUrl}/runtime/rooms/${roomId}/actions`,
         { actionCode, expectedRevision },
         fetchImpl,
+        identityHeaders,
       );
+    },
+    async createGenerationJob(request: Pick<StudioGenerateStoryBibleRequest, "premise" | "playerCount"> & Partial<StudioGenerateStoryBibleRequest>): Promise<GenerationJob> {
+      return postJson(`${normalizedBaseUrl}/creation/generation-jobs`, request, fetchImpl);
+    },
+    async getGenerationJob(jobId: string): Promise<GenerationJob> {
+      return readJson(`${normalizedBaseUrl}/creation/generation-jobs/${jobId}`, fetchImpl);
+    },
+    async runGenerationJob(jobId: string): Promise<GenerationJob> {
+      return postJson(`${normalizedBaseUrl}/creation/generation-jobs/${jobId}/run`, {}, fetchImpl);
     },
     async compileStoryBibleDraft(storyBible: unknown): Promise<CompileStoryBibleDraftResult> {
       return postJson(
@@ -160,7 +178,7 @@ export function createApiClient(baseUrl: string, options: ApiClientOptions = {})
       return readJson(`${normalizedBaseUrl}/creation/theme-assets/jobs/${jobId}`, fetchImpl);
     },
     async runThemeAssetJob(jobId: string): Promise<ThemeAssetJob> {
-      return postJson(`${normalizedBaseUrl}/creation/theme-assets/jobs/${jobId}/run`, {}, fetchImpl);
+      return postJson(`${normalizedBaseUrl}/creation/theme-assets/jobs/${jobId}/run`, {}, fetchImpl, identityHeaders);
     },
     async generateStoryBible(
       request: StudioGenerateStoryBibleRequest,
@@ -171,19 +189,31 @@ export function createApiClient(baseUrl: string, options: ApiClientOptions = {})
       return readJson(`${normalizedBaseUrl}/creation/publish-review/packages/${packageId}`, fetchImpl);
     },
     async publishDraft(packageId: string, semver: string): Promise<ApiPublishedVersion> {
-      return postJson(`${normalizedBaseUrl}/content/packages/${packageId}/publish`, { semver }, fetchImpl);
+      return postJson(`${normalizedBaseUrl}/content/packages/${packageId}/publish`, { semver }, fetchImpl, identityHeaders);
     },
   };
 }
 
-async function postJson<T>(url: string, body: unknown, fetchImpl: typeof fetch): Promise<T> {
+async function postJson<T>(
+  url: string,
+  body: unknown,
+  fetchImpl: typeof fetch,
+  headers: HeadersInit = {},
+): Promise<T> {
   return readResponse(
     await fetchWithUrl(url, fetchImpl, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...headers },
       body: JSON.stringify(body),
     }),
   );
+}
+
+function createIdentityHeaders(options: ApiClientOptions): Readonly<Record<string, string>> {
+  return {
+    ...(options.operatorId ? { "x-operator-id": options.operatorId } : {}),
+    ...(options.playerId ? { "x-player-id": options.playerId } : {}),
+  };
 }
 
 async function readJson<T>(url: string, fetchImpl: typeof fetch): Promise<T> {

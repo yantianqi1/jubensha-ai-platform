@@ -1,29 +1,20 @@
 import { createApiClient } from "./api-client.js";
-import {
-  readChecked,
-  readError,
-  readNonNegativeInteger,
-  readPositiveInteger,
-  readValue,
-  updateText,
-  writeValue,
-} from "./browser-dom.js";
+import { readChecked, readError, readNonNegativeInteger, readPositiveInteger, readValue, updateText, writeValue } from "./browser-dom.js";
 import { createAdminBrowserWorkflow } from "./admin-browser-workflow.js";
 import { resolveApiBaseUrl } from "./app-runtime-config.js";
 import { createPlayBrowserWorkflow } from "./play-browser-workflow.js";
 import { resolveProductSurfaceIdFromPath } from "./product-surfaces.js";
 import { createStudioWorkflow } from "./studio-browser-workflow.js";
+import { initializeScriptCreationJobBrowser } from "./script-creation-job-browser.js";
 
-type RuntimeStateView = {
-  readonly phase: string;
-  readonly revealedClues: readonly string[];
-  readonly npcEvents: readonly { readonly npcCode: string; readonly event: string }[];
-};
+type RuntimeStateView = { readonly phase: string; readonly revealedClues: readonly string[]; readonly npcEvents: readonly { readonly npcCode: string; readonly event: string }[]; };
 
 let roomId = "";
 const studioWorkflow = createStudioWorkflow({
   readForm: readStudioForm,
-  generateStoryBible: (request) => createClient().generateStoryBible(request),
+  createGenerationJob: (request) => createClient().createGenerationJob(request),
+  runGenerationJob: (jobId) => createClient().runGenerationJob(jobId),
+  getGenerationJob: (jobId) => createClient().getGenerationJob(jobId),
   compileStoryBibleDraft: (storyBible) => createClient().compileStoryBibleDraft(storyBible),
   writeCompileSource: (value) => writeValue("[data-story-bible-input]", value),
   writeAdminPackageId: (value) => writeValue('[data-admin-field="packageId"]', value),
@@ -67,11 +58,10 @@ const playWorkflow = createPlayBrowserWorkflow({
   renderRoomState: renderRuntimeRoomState,
 });
 
-
-
 document.documentElement.dataset.ready = "true";
 initializeProductSurface();
 initializeApiBaseUrl();
+initializeScriptCreationJobBrowser({ readBrief: readStudioForm, createClient });
 wireControls();
 
 function initializeProductSurface(): void {
@@ -85,7 +75,10 @@ function initializeProductSurface(): void {
 
 function createClient() {
   const baseUrl = readValue("[data-base-url]", resolveApiBaseUrl(window.location));
-  return createApiClient(baseUrl);
+  return createApiClient(baseUrl, {
+    operatorId: readValue('[data-admin-field="operatorId"]', "").trim(),
+    playerId: readValue('[data-runtime-field="playerId"]', "").trim(),
+  });
 }
 
 function initializeApiBaseUrl(): void {
@@ -223,7 +216,6 @@ async function askNpc(): Promise<void> {
     setStatus(readError(error));
   }
 }
-
 
 function renderRuntimeRoomState(room: { revision: number; state: RuntimeStateView }): void {
   renderRuntimeState(room.state);
