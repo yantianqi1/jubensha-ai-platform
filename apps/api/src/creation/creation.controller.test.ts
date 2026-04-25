@@ -1,14 +1,20 @@
-import { BadRequestException, RequestMethod } from "@nestjs/common";
+import { BadRequestException, HttpStatus, RequestMethod, type ArgumentsHost } from "@nestjs/common";
 import { METHOD_METADATA, PATH_METADATA } from "@nestjs/common/constants";
 import { Test } from "@nestjs/testing";
 import { describe, expect, it } from "vitest";
 import { CreationOrchestrator } from "./creation-orchestrator.js";
 import { CreationController } from "./creation.controller.js";
 import { CreationService } from "./creation-service.js";
+import { GenerationJobNotFoundError, GenerationJobService } from "./generation-job.js";
+import { CreationHttpErrorFilter } from "./creation-http-error.filter.js";
 
 const ROOT_PATH = "creation";
 const COMPILE_PATH = "story-bibles/compile-draft";
 const GENERATE_PATH = "story-bibles/generate";
+const GENERATION_JOBS_PATH = "generation-jobs";
+const GENERATION_JOB_PATH = "generation-jobs/:jobId";
+const RUN_GENERATION_JOB_PATH = "generation-jobs/:jobId/run";
+const GENERATION_JOB_EVENTS_PATH = "generation-jobs/:jobId/events";
 
 const storyBibleInput = {
   meta: {
@@ -66,6 +72,17 @@ describe("CreationController", () => {
     expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(RequestMethod.POST);
   });
 
+  it("exposes generation job route metadata", () => {
+    expect(Reflect.getMetadata(PATH_METADATA, CreationController.prototype.createGenerationJob)).toBe(GENERATION_JOBS_PATH);
+    expect(Reflect.getMetadata(METHOD_METADATA, CreationController.prototype.createGenerationJob)).toBe(RequestMethod.POST);
+    expect(Reflect.getMetadata(PATH_METADATA, CreationController.prototype.getGenerationJob)).toBe(GENERATION_JOB_PATH);
+    expect(Reflect.getMetadata(METHOD_METADATA, CreationController.prototype.getGenerationJob)).toBe(RequestMethod.GET);
+    expect(Reflect.getMetadata(PATH_METADATA, CreationController.prototype.runGenerationJob)).toBe(RUN_GENERATION_JOB_PATH);
+    expect(Reflect.getMetadata(METHOD_METADATA, CreationController.prototype.runGenerationJob)).toBe(RequestMethod.POST);
+    expect(Reflect.getMetadata(PATH_METADATA, CreationController.prototype.streamGenerationJobEvents)).toBe(GENERATION_JOB_EVENTS_PATH);
+    expect(Reflect.getMetadata(METHOD_METADATA, CreationController.prototype.streamGenerationJobEvents)).toBe(RequestMethod.GET);
+  });
+
   it("exposes generate story bible route metadata", () => {
     const handler = CreationController.prototype.generateStoryBible;
 
@@ -93,6 +110,15 @@ describe("CreationController", () => {
             generateStoryBible: async () => ({ storyBible: {}, criticDiagnostics: [], attempts: [] }),
           },
         },
+        {
+          provide: GenerationJobService,
+          useValue: {
+            createJob: async () => ({}),
+            getJob: async () => ({}),
+            runJob: async () => ({}),
+            listJobEvents: async () => [],
+          },
+        },
       ],
     }).compile();
 
@@ -108,20 +134,25 @@ describe("CreationController", () => {
   });
 
   it("rejects bodies without storyBible", async () => {
-    const controller = new CreationController({
-      createDraftFromStoryBible: async () => ({
-        draftPackage: { id: "pkg_1" },
-        flowDiagnostics: [],
-        simulationDiagnostics: [],
-      }),
-    } as CreationService, { generateStoryBible: async () => ({}) } as CreationOrchestrator);
+    const controller = createController();
 
     expect(() => controller.compileStoryBibleDraft({})).toThrow(BadRequestException);
   });
 
+
+  it("maps missing generation jobs to not found responses", () => {
+    const response = createJsonResponse();
+    const host = createArgumentsHost(response);
+
+    new CreationHttpErrorFilter().catch(new GenerationJobNotFoundError("missing job"), host);
+
+    expect(response.statusCode).toBe(HttpStatus.NOT_FOUND);
+    expect(response.body).toEqual({ error: "GenerationJobNotFoundError", message: "missing job" });
+  });
+
   it("passes structured generation requests to the orchestrator", async () => {
     let captured: unknown;
-    const controller = new CreationController({} as CreationService, {
+    const controller = createController({
       async generateStoryBible(input) {
         captured = input;
         return { storyBible: { meta: { title: "ok" } }, criticDiagnostics: [], attempts: [] };
@@ -141,3 +172,45 @@ describe("CreationController", () => {
     expect(result).toEqual({ storyBible: { meta: { title: "ok" } }, criticDiagnostics: [], attempts: [] });
   });
 });
+
+
+function createController(orchestrator: CreationOrchestrator = { generateStoryBible: async () => ({}) } as CreationOrchestrator): CreationController {
+  return new CreationController(
+    {
+      createDraftFromStoryBible: async () => ({
+        draftPackage: { id: "pkg_1" },
+        flowDiagnostics: [],
+        simulationDiagnostics: [],
+      }),
+    } as CreationService,
+    orchestrator,
+    {
+      createJob: async () => ({}),
+      getJob: async () => ({}),
+      runJob: async () => ({}),
+      listJobEvents: async () => [],
+    } as unknown as GenerationJobService,
+  );
+}
+
+function createJsonResponse() {
+  return {
+    statusCode: 0,
+    body: undefined as unknown,
+    status(statusCode: number) {
+      this.statusCode = statusCode;
+      return this;
+    },
+    json(body: unknown) {
+      this.body = body;
+    },
+  };
+}
+
+function createArgumentsHost(response: ReturnType<typeof createJsonResponse>): ArgumentsHost {
+  return {
+    switchToHttp: () => ({
+      getResponse: () => response,
+    }),
+  } as ArgumentsHost;
+}

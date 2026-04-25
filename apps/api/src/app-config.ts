@@ -1,6 +1,6 @@
-const DEFAULT_API_PORT = 3001;
+const DEFAULT_API_PORT = 8888;
 const DEV_LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "[::1]", "0.0.0.0"] as const;
-const DEV_ORIGIN_PORTS = [3000, 3001, 5173] as const;
+const DEV_ORIGIN_PORTS = [3000, 8888, 5173] as const;
 
 export function readApiPort(env: NodeJS.ProcessEnv = process.env): number {
   const value = env.API_PORT;

@@ -1,6 +1,8 @@
-import { BadRequestException, NotFoundException, RequestMethod } from "@nestjs/common";
+import { BadRequestException, ConflictException, NotFoundException, RequestMethod } from "@nestjs/common";
 import { METHOD_METADATA, PATH_METADATA } from "@nestjs/common/constants";
 import { describe, expect, it } from "vitest";
+import { AuditService } from "../audit/audit-service.js";
+import { InMemoryAuditRepository } from "../audit/audit-repository.js";
 import { ThemeAssetJobController } from "./theme-asset-job.controller.js";
 import { ThemeAssetJobExecutor, ThemeAssetJobStore } from "./theme-asset-job.js";
 import { ThemeAssetProviderError } from "./theme-asset-provider.js";
@@ -28,7 +30,7 @@ describe("ThemeAssetJobController", () => {
   });
 
   it("creates queued jobs from story bible input and returns requested assets", () => {
-    const controller = createController();
+    const { controller } = createController();
     const job = controller.createThemeAssetJob({ storyBible: storyBibleInput });
 
     expect(job.status).toBe("queued");
@@ -37,33 +39,55 @@ describe("ThemeAssetJobController", () => {
   });
 
   it("runs queued jobs explicitly through the provider", async () => {
-    const controller = createController();
+    const { controller, auditService } = createController();
     const job = controller.createThemeAssetJob({ storyBible: storyBibleInput });
 
-    const completed = await controller.runThemeAssetJob(job.id);
+    const completed = await controller.runThemeAssetJob(job.id, { "x-operator-id": "operator_1" });
 
     expect(completed.status).toBe("completed");
     expect(completed.generatedAssets[0]).toMatchObject({ assetCode: "cover", uri: "asset://cover.png" });
+    await expect(auditService.listEvents({ targetType: "theme_asset_job", targetId: job.id })).resolves.toEqual([
+      expect.objectContaining({ action: "run_asset_job", status: "succeeded" }),
+    ]);
   });
 
   it("surfaces provider failures on the job", async () => {
-    const controller = createController({ fail: true });
+    const { controller, auditService } = createController({ fail: true });
     const job = controller.createThemeAssetJob({ storyBible: storyBibleInput });
 
-    const failed = await controller.runThemeAssetJob(job.id);
+    const failed = await controller.runThemeAssetJob(job.id, { "x-operator-id": "operator_1" });
 
     expect(failed.status).toBe("failed");
     expect(failed.failure).toEqual({ code: "ProviderDown", message: "offline for cover" });
+    await expect(auditService.listEvents({ targetType: "theme_asset_job", targetId: job.id })).resolves.toEqual([
+      expect.objectContaining({ action: "run_asset_job", status: "failed" }),
+    ]);
+  });
+
+  it("returns explicit conflicts when completed jobs are rerun", async () => {
+    const { controller } = createController();
+    const job = controller.createThemeAssetJob({ storyBible: storyBibleInput });
+
+    await controller.runThemeAssetJob(job.id, { "x-operator-id": "operator_1" });
+
+    await expect(controller.runThemeAssetJob(job.id, { "x-operator-id": "operator_1" })).rejects.toThrow(ConflictException);
+  });
+
+  it("requires operator identity to run asset jobs", async () => {
+    const { controller } = createController();
+    const job = controller.createThemeAssetJob({ storyBible: storyBibleInput });
+
+    await expect(controller.runThemeAssetJob(job.id, {})).rejects.toThrow();
   });
 
   it("rejects requests without story bible input", () => {
-    expect(() => createController().createThemeAssetJob({})).toThrow(BadRequestException);
+    expect(() => createController().controller.createThemeAssetJob({})).toThrow(BadRequestException);
   });
 
   it("returns explicit not found errors for unknown jobs", async () => {
-    const controller = createController();
+    const { controller } = createController();
 
-    await expect(controller.runThemeAssetJob("missing_job")).rejects.toThrow(NotFoundException);
+    await expect(controller.runThemeAssetJob("missing_job", { "x-operator-id": "operator_1" })).rejects.toThrow(NotFoundException);
     expect(() => controller.getThemeAssetJob("missing_job")).toThrow(NotFoundException);
   });
 });
@@ -71,7 +95,16 @@ describe("ThemeAssetJobController", () => {
 function createController(options: { readonly fail?: boolean } = {}) {
   const store = new ThemeAssetJobStore();
   const provider = options.fail ? createFailingProvider() : createProvider();
-  return new ThemeAssetJobController(store, new ThemeAssetJobExecutor(store, provider));
+  const auditService = new AuditService({
+    repository: new InMemoryAuditRepository(),
+    idGenerator: () => "audit_1",
+    now: () => "2026-04-25T00:00:00.000Z",
+  });
+
+  return {
+    controller: new ThemeAssetJobController(store, new ThemeAssetJobExecutor(store, provider), auditService),
+    auditService,
+  };
 }
 
 function createProvider() {

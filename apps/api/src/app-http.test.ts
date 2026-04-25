@@ -2,6 +2,7 @@ import { RequestMethod } from "@nestjs/common";
 import {
   METHOD_METADATA,
   PATH_METADATA,
+  REDIRECT_METADATA,
 } from "@nestjs/common/constants";
 import { beforeEach, describe, expect, it } from "vitest";
 import { ContentService } from "./content/content-service.js";
@@ -13,6 +14,7 @@ import { HealthController } from "./health/health.controller.js";
 import { HomeController } from "./home/home.controller.js";
 import { RuntimeService } from "./runtime/runtime-service.js";
 import { InMemoryRuntimeRepository } from "./runtime/in-memory-runtime-repository.js";
+import { WebStaticController } from "./web-static/web-static.controller.js";
 
 describe("Application HTTP entrypoints", () => {
   let demoController: DemoController;
@@ -39,13 +41,21 @@ describe("Application HTTP entrypoints", () => {
     expectRoute(DemoController, "runFogHarbor", "fog-harbor", RequestMethod.POST);
     expect(Reflect.getMetadata(PATH_METADATA, HomeController)).toBe("/");
     expectRoute(HomeController, "getHome", "/", RequestMethod.GET);
+    expect(Reflect.getMetadata(PATH_METADATA, WebStaticController)).toBe("/");
+    expectRoute(WebStaticController, "getStudio", ["studio", "studio/"], RequestMethod.GET);
   });
 
-  it("renders a browser-visible MVP home page", () => {
-    const html = new HomeController().getHome();
+  it("redirects the root entrypoint to Studio", () => {
+    const redirect = Reflect.getMetadata(REDIRECT_METADATA, HomeController.prototype.getHome);
 
-    expect(html).toContain("剧本杀游戏平台 MVP");
-    expect(html).toContain("/demo/fog-harbor");
+    expect(redirect).toEqual({ statusCode: 302, url: "/studio/" });
+  });
+
+  it("renders the built Studio static page", async () => {
+    const html = await new WebStaticController().getStudio();
+
+    expect(html).toContain('data-surface-shell="studio-web"');
+    expect(html).toContain('src="/app.js"');
   });
 
   it("runs a complete content publish and runtime action demo", async () => {
@@ -62,11 +72,11 @@ describe("Application HTTP entrypoints", () => {
 function expectRoute(
   controller: object,
   methodName: string,
-  path: string | undefined,
+  path: string | readonly string[] | undefined,
   requestMethod: RequestMethod,
 ): void {
   const handler = controller.prototype[methodName];
 
-  expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe(path);
+  expect(Reflect.getMetadata(PATH_METADATA, handler)).toEqual(path);
   expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(requestMethod);
 }

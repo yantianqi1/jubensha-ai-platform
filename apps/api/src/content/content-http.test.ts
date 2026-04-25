@@ -1,6 +1,7 @@
 import {
   HttpStatus,
   RequestMethod,
+  UnauthorizedException,
   type ArgumentsHost,
 } from "@nestjs/common";
 import {
@@ -9,6 +10,8 @@ import {
 } from "@nestjs/common/constants";
 import { Test } from "@nestjs/testing";
 import { beforeEach, describe, expect, it } from "vitest";
+import { AuditService } from "../audit/audit-service.js";
+import { InMemoryAuditRepository } from "../audit/audit-repository.js";
 import { ContentController } from "./content.controller.js";
 import { ContentPublishBlockedError, ContentValidationError } from "./content-errors.js";
 import { ContentHttpErrorFilter } from "./content-http-error.filter.js";
@@ -74,8 +77,10 @@ const validPackageInput = {
 
 describe("Content HTTP entrypoints", () => {
   let controller: ContentController;
+  let auditService: AuditService;
 
   beforeEach(async () => {
+    auditService = createAuditService();
     const moduleRef = await Test.createTestingModule({
       controllers: [ContentController],
       providers: [
@@ -102,6 +107,7 @@ describe("Content HTTP entrypoints", () => {
               publishGate,
             }),
         },
+        { provide: AuditService, useValue: auditService },
       ],
     }).compile();
 
@@ -153,11 +159,14 @@ describe("Content HTTP entrypoints", () => {
 
   it("publishes a draft package", async () => {
     const created = await controller.createDraftPackage(validPackageInput);
-    const version = await controller.publishDraft(created.id, { semver: "1.0.0" });
+    const version = await controller.publishDraft(created.id, { semver: "1.0.0" }, { "x-operator-id": "operator_1", "x-request-id": "req_1" });
 
     expect(version.id).toMatch(/^ver_/);
     expect(version.semver).toBe("1.0.0");
     expect(version.state).toBe("released");
+    await expect(auditService.listEvents({ targetType: "package", targetId: created.id })).resolves.toEqual([
+      expect.objectContaining({ action: "publish_draft", status: "succeeded", requestId: "req_1" }),
+    ]);
   });
 
   it("updates draft package content", async () => {
@@ -174,9 +183,25 @@ describe("Content HTTP entrypoints", () => {
 
   it("loads a released version", async () => {
     const created = await controller.createDraftPackage(validPackageInput);
-    const version = await controller.publishDraft(created.id, { semver: "1.0.0" });
+    const version = await controller.publishDraft(created.id, { semver: "1.0.0" }, { "x-operator-id": "operator_1" });
 
     await expect(controller.getReleasedVersion(version.id)).resolves.toEqual(version);
+  });
+
+  it("requires operator identity for publish", async () => {
+    const created = await controller.createDraftPackage(validPackageInput);
+
+    await expect(controller.publishDraft(created.id, { semver: "1.0.0" }, {})).rejects.toThrow(UnauthorizedException);
+  });
+
+  it("records failed publish attempts after identity is established", async () => {
+    const created = await controller.createDraftPackage({ ...validPackageInput, meta: { ...validPackageInput.meta, truth: undefined } });
+
+    await expect(controller.publishDraft(created.id, { semver: "1.0.0" }, { "x-operator-id": "operator_1" })).rejects.toThrow();
+
+    await expect(auditService.listEvents({ targetType: "package", targetId: created.id })).resolves.toEqual([
+      expect.objectContaining({ action: "publish_draft", status: "failed" }),
+    ]);
   });
 
 
@@ -244,4 +269,12 @@ function createArgumentsHost(response: ReturnType<typeof createJsonResponse>): A
       getResponse: () => response,
     }),
   } as ArgumentsHost;
+}
+
+function createAuditService(): AuditService {
+  return new AuditService({
+    repository: new InMemoryAuditRepository(),
+    idGenerator: () => "audit_1",
+    now: () => "2026-04-25T00:00:00.000Z",
+  });
 }

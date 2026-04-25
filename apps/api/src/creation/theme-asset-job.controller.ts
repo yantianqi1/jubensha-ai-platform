@@ -1,13 +1,16 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post } from "@nestjs/common";
+import { BadRequestException, Body, ConflictException, Controller, Get, Headers, NotFoundException, Param, Post } from "@nestjs/common";
 import { parseStoryBible } from "@jubensha/dsl";
 import { compileThemeAssets } from "./theme-asset-compiler.js";
-import { ThemeAssetJobExecutor, ThemeAssetJobStore } from "./theme-asset-job.js";
+import { ThemeAssetJobConflictError, ThemeAssetJobExecutor, ThemeAssetJobStore } from "./theme-asset-job.js";
+import { AuditService } from "../audit/audit-service.js";
+import { readRequestId, requireOperator, type RequestHeaders } from "../identity/request-identity.js";
 
 @Controller("creation/theme-assets/jobs")
 export class ThemeAssetJobController {
   constructor(
     private readonly jobs: ThemeAssetJobStore,
     private readonly executor: ThemeAssetJobExecutor,
+    private readonly auditService: AuditService,
   ) {}
 
   @Post()
@@ -19,14 +22,44 @@ export class ThemeAssetJobController {
   }
 
   @Post(":jobId/run")
-  async runThemeAssetJob(@Param("jobId") jobId: string) {
-    const job = await this.executor.runJob(jobId);
+  async runThemeAssetJob(@Param("jobId") jobId: string, @Headers() headers: RequestHeaders) {
+    const actor = requireOperator(headers);
+    const requestId = readRequestId(headers);
 
-    if (!job) {
-      throw new NotFoundException({ error: "ThemeAssetJobNotFoundError", message: "Theme asset job not found" });
+    try {
+      const job = await this.executor.runJob(jobId);
+
+      if (!job) {
+        throw new NotFoundException({ error: "ThemeAssetJobNotFoundError", message: "Theme asset job not found" });
+      }
+
+      await this.auditService.record({
+        action: "run_asset_job",
+        actor,
+        targetType: "theme_asset_job",
+        targetId: jobId,
+        status: job.status === "failed" ? "failed" : "succeeded",
+        ...optionalRequestId(requestId),
+        ...(job.failure ? { errorCode: job.failure.code } : {}),
+      });
+      return job;
+    } catch (error) {
+      await this.auditService.record({
+        action: "run_asset_job",
+        actor,
+        targetType: "theme_asset_job",
+        targetId: jobId,
+        status: "failed",
+        ...optionalRequestId(requestId),
+        errorCode: readErrorCode(error),
+      });
+
+      if (error instanceof ThemeAssetJobConflictError) {
+        throw new ConflictException({ error: error.name, message: error.message });
+      }
+
+      throw error;
     }
-
-    return job;
   }
 
   @Get(":jobId")
@@ -54,4 +87,16 @@ function readStoryBible(body: unknown): unknown {
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function readErrorCode(error: unknown): string {
+  if (error instanceof NotFoundException) {
+    return "ThemeAssetJobNotFoundError";
+  }
+
+  return error instanceof Error ? error.name : "UnknownError";
+}
+
+function optionalRequestId(requestId: string | undefined): { readonly requestId?: string } {
+  return requestId ? { requestId } : {};
 }

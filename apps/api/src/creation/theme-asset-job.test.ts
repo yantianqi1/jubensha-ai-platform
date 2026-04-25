@@ -1,7 +1,9 @@
+import { Test } from "@nestjs/testing";
 import { parseStoryBible } from "@jubensha/dsl";
 import { describe, expect, it } from "vitest";
 import { compileThemeAssets } from "./theme-asset-compiler.js";
 import { ThemeAssetJobExecutor, ThemeAssetJobStore } from "./theme-asset-job.js";
+import { THEME_ASSET_PROVIDER } from "./theme-asset-provider.js";
 
 const STORY_BIBLE_INPUT = {
   meta: {
@@ -53,6 +55,19 @@ describe("ThemeAssetJobStore", () => {
     expect(store.getJob(job.id)).toEqual(job);
   });
 
+
+  it("resolves executor dependencies through Nest injection", async () => {
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        ThemeAssetJobStore,
+        ThemeAssetJobExecutor,
+        { provide: THEME_ASSET_PROVIDER, useValue: createProvider() },
+      ],
+    }).compile();
+
+    expect(moduleRef.get(ThemeAssetJobExecutor)).toBeInstanceOf(ThemeAssetJobExecutor);
+  });
+
   it("runs jobs through a provider and records completed assets", async () => {
     const { store, job } = createQueuedJob();
     const executor = new ThemeAssetJobExecutor(store, createProvider());
@@ -65,6 +80,18 @@ describe("ThemeAssetJobStore", () => {
       "character.butler",
       "clue.C-01",
     ]);
+  });
+
+  it("rejects completed job reruns explicitly", async () => {
+    const { store, job } = createQueuedJob();
+    const executor = new ThemeAssetJobExecutor(store, createProvider());
+
+    await executor.runJob(job.id);
+
+    await expect(executor.runJob(job.id)).rejects.toMatchObject({
+      name: "ThemeAssetJobConflictError",
+      message: `Theme asset job is already completed: ${job.id}`,
+    });
   });
 
   it("marks provider failures explicitly", async () => {

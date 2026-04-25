@@ -9,10 +9,10 @@ describe("app config", () => {
       "http://127.0.0.1:3000",
       "http://[::1]:3000",
       "http://0.0.0.0:3000",
-      "http://localhost:3001",
-      "http://127.0.0.1:3001",
-      "http://[::1]:3001",
-      "http://0.0.0.0:3001",
+      "http://localhost:8888",
+      "http://127.0.0.1:8888",
+      "http://[::1]:8888",
+      "http://0.0.0.0:8888",
       "http://localhost:5173",
       "http://127.0.0.1:5173",
       "http://[::1]:5173",
@@ -32,6 +32,10 @@ describe("app config", () => {
 
   it("reads a valid API port", () => {
     expect(readApiPort({ API_PORT: "3010" })).toBe(3010);
+  });
+
+  it("defaults to the fixed Studio API port", () => {
+    expect(readApiPort({})).toBe(8888);
   });
 
   it("rejects invalid API ports", () => {

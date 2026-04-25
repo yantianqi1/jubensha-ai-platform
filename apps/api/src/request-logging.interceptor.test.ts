@@ -51,6 +51,32 @@ describe("RequestLoggingInterceptor", () => {
     });
     expect(logger.log).not.toHaveBeenCalled();
   });
+
+  it("logs explicit operator and player identity headers when present", async () => {
+    const logger = createLogger();
+    const response = createResponse(200);
+    const interceptor = new RequestLoggingInterceptor(logger);
+
+    await firstValueFrom(
+      interceptor.intercept(
+        createContext({
+          method: "POST",
+          path: "/runtime/rooms/room_1/actions",
+          response,
+          headers: { "x-player-id": "player_a", "x-operator-id": "operator_1" },
+        }),
+        createHandler(of({ ok: true })),
+      ),
+    );
+
+    expect(logger.log).toHaveBeenCalledWith({
+      method: "POST",
+      path: "/runtime/rooms/room_1/actions",
+      status: 200,
+      operatorId: "operator_1",
+      playerId: "player_a",
+    });
+  });
 });
 
 type LoggerSink = Readonly<{
@@ -77,10 +103,11 @@ function createContext(options: {
   readonly method: string;
   readonly path: string;
   readonly response: Readonly<{ statusCode: number }>;
+  readonly headers?: Readonly<Record<string, string>>;
 }): ExecutionContext {
   return {
     switchToHttp: () => ({
-      getRequest: () => ({ method: options.method, originalUrl: options.path }),
+      getRequest: () => ({ method: options.method, originalUrl: options.path, headers: options.headers ?? {} }),
       getResponse: () => options.response,
     }),
   } as ExecutionContext;
