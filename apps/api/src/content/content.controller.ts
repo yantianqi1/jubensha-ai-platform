@@ -7,15 +7,21 @@ import {
   Param,
   Patch,
   Post,
+  Headers,
   UseFilters,
 } from "@nestjs/common";
 import { ContentService } from "./content-service.js";
 import { ContentHttpErrorFilter } from "./content-http-error.filter.js";
+import { AuditService } from "../audit/audit-service.js";
+import { readRequestId, requireOperator, type RequestHeaders } from "../identity/request-identity.js";
 
 @UseFilters(ContentHttpErrorFilter)
 @Controller("content")
 export class ContentController {
-  constructor(@Inject(ContentService) private readonly contentService: ContentService) {}
+  constructor(
+    @Inject(ContentService) private readonly contentService: ContentService,
+    @Inject(AuditService) private readonly auditService: AuditService,
+  ) {}
 
   @Post("packages")
   createDraftPackage(@Body() body: unknown) {
@@ -38,8 +44,37 @@ export class ContentController {
   }
 
   @Post("packages/:packageId/publish")
-  publishDraft(@Param("packageId") packageId: string, @Body() body: unknown) {
-    return this.contentService.publishDraft(packageId, readSemver(body));
+  async publishDraft(
+    @Param("packageId") packageId: string,
+    @Body() body: unknown,
+    @Headers() headers: RequestHeaders,
+  ) {
+    const actor = requireOperator(headers);
+    const requestId = readRequestId(headers);
+
+    try {
+      const version = await this.contentService.publishDraft(packageId, readSemver(body));
+      await this.auditService.record({
+        action: "publish_draft",
+        actor,
+        targetType: "package",
+        targetId: packageId,
+        status: "succeeded",
+        ...optionalRequestId(requestId),
+      });
+      return version;
+    } catch (error) {
+      await this.auditService.record({
+        action: "publish_draft",
+        actor,
+        targetType: "package",
+        targetId: packageId,
+        status: "failed",
+        ...optionalRequestId(requestId),
+        errorCode: readErrorCode(error),
+      });
+      throw error;
+    }
   }
 
   @Get("versions/:versionId")
@@ -66,4 +101,12 @@ function readSemver(body: unknown): string {
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function readErrorCode(error: unknown): string {
+  return error instanceof Error ? error.name : "UnknownError";
+}
+
+function optionalRequestId(requestId: string | undefined): { readonly requestId?: string } {
+  return requestId ? { requestId } : {};
 }

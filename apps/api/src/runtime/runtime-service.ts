@@ -1,4 +1,5 @@
 import { RuntimeConflictError, RuntimeNotFoundError, RuntimeRuleError } from "./runtime-errors.js";
+import { projectRuntimeEvents, type RuntimeEventEnvelope } from "./runtime-event-stream.js";
 import type { RuntimeIdGenerator } from "./runtime-id-generator.js";
 import {
   applyActionOrThrow,
@@ -48,6 +49,10 @@ export interface JoinRuntimeSeatInput {
 export interface ApplyRuntimeActionInput {
   readonly actionCode: string;
   readonly expectedRevision: number;
+}
+
+export interface ListRuntimeEventsInput {
+  readonly afterEventId?: string;
 }
 
 export class RuntimeService {
@@ -102,6 +107,14 @@ export class RuntimeService {
     const nextState = applyActionOrThrow(scene, input.actionCode, room.state);
 
     return this.repository.saveRoom(buildActionRoom(room, scene, input.actionCode, nextState));
+  }
+
+  async listRuntimeEvents(
+    roomId: string,
+    input: ListRuntimeEventsInput,
+  ): Promise<readonly RuntimeEventEnvelope[]> {
+    const room = await this.getRoom(roomId);
+    return projectRuntimeEvents(room, input);
   }
 
   async replayRoom(roomId: string): Promise<RuntimeRoomRecord> {

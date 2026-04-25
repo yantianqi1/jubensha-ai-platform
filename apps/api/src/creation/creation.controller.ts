@@ -1,19 +1,56 @@
-import { BadRequestException, Body, Controller, Inject, Post } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Header, Inject, Param, Post, Query, Sse, UseFilters, type MessageEvent } from "@nestjs/common";
 import { parseStoryBible } from "@jubensha/dsl";
+import { CreationHttpErrorFilter } from "./creation-http-error.filter.js";
 import { CreationOrchestrator } from "./creation-orchestrator.js";
+import { from, type Observable } from "rxjs";
 import { CreationService } from "./creation-service.js";
+import { GenerationJobService, type GenerationJobEventEnvelope } from "./generation-job.js";
+import { toGenerationJobDetailResponse } from "./generation-job-detail.js";
 import type { StoryPlannerInput } from "./story-planner-agent.js";
 
+@UseFilters(CreationHttpErrorFilter)
 @Controller("creation")
 export class CreationController {
   constructor(
     @Inject(CreationService) private readonly creationService: CreationService,
     @Inject(CreationOrchestrator) private readonly orchestrator: CreationOrchestrator,
+    @Inject(GenerationJobService) private readonly generationJobs: GenerationJobService,
   ) {}
 
   @Post("story-bibles/generate")
   generateStoryBible(@Body() body: unknown) {
     return this.orchestrator.generateStoryBible(readGenerateRequest(body));
+  }
+
+  @Post("generation-jobs")
+  @Header("Cache-Control", "no-store")
+  async createGenerationJob(@Body() body: unknown) {
+    const job = await this.generationJobs.createJob(readGenerateRequest(body));
+    return toGenerationJobDetailResponse(job);
+  }
+
+  @Get("generation-jobs/:jobId")
+  @Header("Cache-Control", "no-store")
+  async getGenerationJob(@Param("jobId") jobId: string) {
+    const job = await this.generationJobs.getJob(jobId);
+    return toGenerationJobDetailResponse(job);
+  }
+
+  @Post("generation-jobs/:jobId/run")
+  @Header("Cache-Control", "no-store")
+  async runGenerationJob(@Param("jobId") jobId: string) {
+    const job = await this.generationJobs.runJob(jobId);
+    return toGenerationJobDetailResponse(job);
+  }
+
+  @Sse("generation-jobs/:jobId/events")
+  async streamGenerationJobEvents(
+    @Param("jobId") jobId: string,
+    @Query("afterEventId") afterEventId?: string,
+  ): Promise<Observable<MessageEvent>> {
+    const input = afterEventId ? { afterEventId } : {};
+    const events = await this.generationJobs.listJobEvents(jobId, input);
+    return from(events.map(toGenerationJobSseMessage));
   }
 
   @Post("story-bibles/compile-draft")
@@ -108,4 +145,8 @@ function readOptionalPositiveInteger(body: Record<string, unknown>, key: string)
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function toGenerationJobSseMessage(event: GenerationJobEventEnvelope): MessageEvent {
+  return { data: event, id: event.eventId, type: event.type };
 }

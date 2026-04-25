@@ -1,4 +1,4 @@
-const API_PORT = "3001";
+const API_PORT = "8888";
 const FALLBACK_API_HOST = "127.0.0.1";
 const UNSAFE_BROWSER_HOSTS = new Set(["", "0.0.0.0", "::", "[::]"]);
 

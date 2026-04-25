@@ -1,4 +1,4 @@
-import type { StudioGenerateStoryBibleRequest, StudioGenerateStoryBibleResult } from "./api-client.js";
+import type { GenerationJob, StudioDiagnostic, StudioGenerateStoryBibleRequest, StudioGenerateStoryBibleResult, StudioGenerationAttempt } from "./api-client.js";
 import {
   buildGenerateRequest,
   createStorySkeletonEditorState,
@@ -24,7 +24,9 @@ export interface CreationPanelState {
 
 export interface StudioWorkflowPorts {
   readonly readForm: () => StudioForm;
-  readonly generateStoryBible: (request: StudioGenerateStoryBibleRequest) => Promise<StudioGenerateStoryBibleResult>;
+  readonly createGenerationJob: (request: StudioGenerateStoryBibleRequest) => Promise<GenerationJob>;
+  readonly runGenerationJob: (jobId: string) => Promise<GenerationJob>;
+  readonly getGenerationJob: (jobId: string) => Promise<GenerationJob>;
   readonly compileStoryBibleDraft: (storyBible: unknown) => Promise<unknown>;
   readonly writeCompileSource: (value: string) => void;
   readonly writeAdminPackageId?: (value: string) => void;
@@ -49,7 +51,7 @@ export function createStudioWorkflow(ports: StudioWorkflowPorts) {
       ports.renderStudioPanel(LOADING_STUDIO_STATE);
 
       try {
-        const result = await ports.generateStoryBible(buildGenerateRequest(ports.readForm()));
+        const result = await runGenerationJobFlow(ports, buildGenerateRequest(ports.readForm()));
         previousStoryBible = latestStoryBible;
         latestStoryBible = result.storyBible;
         ports.writeCompileSource(formatStoryBibleJson(result.storyBible));
@@ -68,6 +70,100 @@ export function createStudioWorkflow(ports: StudioWorkflowPorts) {
       await compileLatestStoryBibleDraft(ports, latestStoryBible);
     },
   };
+}
+
+async function runGenerationJobFlow(
+  ports: StudioWorkflowPorts,
+  request: StudioGenerateStoryBibleRequest,
+): Promise<StudioGenerateStoryBibleResult> {
+  const created = await ports.createGenerationJob(request);
+  const jobId = readGenerationJobId(created);
+  await ports.runGenerationJob(jobId);
+  return toGenerateStoryBibleResult(await ports.getGenerationJob(jobId));
+}
+
+function readGenerationJobId(job: GenerationJob): string {
+  const jobId = job.jobId ?? job.id;
+
+  if (!jobId) {
+    throw new Error("Generation job response is missing jobId");
+  }
+
+  return jobId;
+}
+
+function toGenerateStoryBibleResult(job: GenerationJob): StudioGenerateStoryBibleResult {
+  const attempts = readGenerationAttempts(job);
+  const selectedAttempt = readSelectedAttempt(job, attempts);
+
+  return {
+    storyBible: selectedAttempt.storyBible,
+    attempts,
+    criticDiagnostics: selectedAttempt.criticDiagnostics,
+    storyBibleDiagnostics: selectedAttempt.storyBibleDiagnostics,
+  };
+}
+
+function readGenerationAttempts(job: GenerationJob): readonly StudioGenerationAttempt[] {
+  if (!job.attempts) {
+    throw new Error(`Generation job ${readGenerationJobId(job)} does not include raw StoryBible attempts`);
+  }
+
+  return job.attempts.map((attempt) => {
+    if (!isObjectRecord(attempt)) {
+      throw new Error(`Generation job ${readGenerationJobId(job)} has invalid attempt record`);
+    }
+
+    return {
+      attempt: readNumber(attempt.attempt, "attempt"),
+      accepted: attempt.accepted === true,
+      storyBible: attempt.storyBible,
+      criticDiagnostics: readDiagnostics(attempt.criticDiagnostics),
+      storyBibleDiagnostics: readDiagnostics(attempt.storyBibleDiagnostics),
+    };
+  });
+}
+
+function readSelectedAttempt(
+  job: GenerationJob,
+  attempts: readonly StudioGenerationAttempt[],
+): StudioGenerationAttempt {
+  const selected = findSelectedAttempt(job, attempts) ?? attempts.at(-1);
+
+  if (!selected) {
+    throw new Error(`Generation job ${readGenerationJobId(job)} has no attempts`);
+  }
+
+  return selected;
+}
+
+function findSelectedAttempt(
+  job: GenerationJob,
+  attempts: readonly StudioGenerationAttempt[],
+): StudioGenerationAttempt | undefined {
+  if (!job.selectedAttemptId) {
+    return undefined;
+  }
+
+  const rawAttempt = job.attempts?.find((attempt) => isObjectRecord(attempt) && attempt.id === job.selectedAttemptId);
+
+  if (!isObjectRecord(rawAttempt)) {
+    return undefined;
+  }
+
+  return attempts.find((attempt) => attempt.attempt === rawAttempt.attempt);
+}
+
+function readNumber(value: unknown, field: string): number {
+  if (typeof value !== "number") {
+    throw new Error(`Generation job attempt is missing ${field}`);
+  }
+
+  return value;
+}
+
+function readDiagnostics(value: unknown): readonly StudioDiagnostic[] {
+  return Array.isArray(value) ? value as readonly StudioDiagnostic[] : [];
 }
 
 function formatStudioResult(result: StudioGenerateStoryBibleResult, previous: unknown, next: unknown): StudioPanelState {

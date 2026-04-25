@@ -24,6 +24,13 @@ export interface ThemeAssetJobRecord {
   readonly failure?: ThemeAssetJobFailure;
 }
 
+export class ThemeAssetJobConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ThemeAssetJobConflictError";
+  }
+}
+
 @Injectable()
 export class ThemeAssetJobStore {
   private readonly jobs = new Map<string, ThemeAssetJobRecord>();
@@ -57,7 +64,7 @@ export class ThemeAssetJobStore {
 @Injectable()
 export class ThemeAssetJobExecutor {
   constructor(
-    private readonly jobs: ThemeAssetJobStore,
+    @Inject(ThemeAssetJobStore) private readonly jobs: ThemeAssetJobStore,
     @Inject(THEME_ASSET_PROVIDER) private readonly provider: ThemeAssetProvider,
   ) {}
 
@@ -68,6 +75,8 @@ export class ThemeAssetJobExecutor {
       return undefined;
     }
 
+    assertRunnable(job);
+
     this.jobs.saveJob(markRunning(job));
 
     try {
@@ -75,6 +84,16 @@ export class ThemeAssetJobExecutor {
     } catch (error) {
       return this.jobs.saveJob(markFailed(job, readProviderFailure(error)));
     }
+  }
+}
+
+function assertRunnable(job: ThemeAssetJobRecord): void {
+  if (job.status === "completed") {
+    throw new ThemeAssetJobConflictError(`Theme asset job is already completed: ${job.id}`);
+  }
+
+  if (job.status === "running") {
+    throw new ThemeAssetJobConflictError(`Theme asset job is already running: ${job.id}`);
   }
 }
 

@@ -1,4 +1,4 @@
-export type ApiSurface = "creation" | "review" | "runtime" | "content" | "demo" | "generation";
+export type ApiSurface = "creation" | "review" | "runtime" | "content" | "demo" | "generation" | "audit";
 export type HttpMethod = "GET" | "POST" | "PATCH";
 
 export interface ApiContractRoute {
@@ -22,6 +22,7 @@ const contentNotFoundErrors = ["ContentNotFoundError"] as const;
 const contentWriteErrors = [invalidRequestError, "ContentValidationError"] as const;
 const runtimeRoomErrors = ["RuntimeNotFoundError"] as const;
 const runtimeActionErrors = [invalidRequestError, "RuntimeConflictError", "RuntimeNotFoundError", "RuntimeRuleError"] as const;
+const identityErrors = ["IdentityRequired", "IdentityMismatch"] as const;
 
 export const apiContractRoutes: readonly ApiContractRoute[] = [
   route({
@@ -30,6 +31,34 @@ export const apiContractRoutes: readonly ApiContractRoute[] = [
     path: "/creation/story-bibles/generate",
     success: "GenerateStoryBibleResult",
     errors: [invalidRequestError, "CreationModelValidationError"],
+  }),
+  route({
+    surface: "creation",
+    method: "POST",
+    path: "/creation/generation-jobs",
+    success: "GenerationJobRecord",
+    errors: [invalidRequestError],
+  }),
+  route({
+    surface: "creation",
+    method: "GET",
+    path: "/creation/generation-jobs/:jobId",
+    success: "GenerationJobRecord",
+    errors: ["GenerationJobNotFoundError"],
+  }),
+  route({
+    surface: "creation",
+    method: "POST",
+    path: "/creation/generation-jobs/:jobId/run",
+    success: "GenerationJobRecord",
+    errors: ["GenerationJobNotFoundError"],
+  }),
+  route({
+    surface: "creation",
+    method: "GET",
+    path: "/creation/generation-jobs/:jobId/events",
+    success: "GenerationJobEventEnvelope SSE",
+    errors: ["GenerationJobNotFoundError"],
   }),
   route({
     surface: "creation",
@@ -64,7 +93,7 @@ export const apiContractRoutes: readonly ApiContractRoute[] = [
     method: "POST",
     path: "/creation/theme-assets/jobs/:jobId/run",
     success: "ThemeAssetJobRecord",
-    errors: ["ThemeAssetJobNotFoundError"],
+    errors: ["ThemeAssetJobNotFoundError", "ThemeAssetJobConflictError", ...identityErrors],
   }),
   route({
     surface: "review",
@@ -95,6 +124,13 @@ export const apiContractRoutes: readonly ApiContractRoute[] = [
     errors: [invalidRequestError, "RuntimeNotFoundError", "GenerationModelError"],
   }),
   route({
+    surface: "audit",
+    method: "GET",
+    path: "/audit/events",
+    success: "AuditEventRecord[]",
+    errors: [],
+  }),
+  route({
     surface: "runtime",
     method: "POST",
     path: "/runtime/rooms",
@@ -114,7 +150,7 @@ export const apiContractRoutes: readonly ApiContractRoute[] = [
     method: "POST",
     path: "/runtime/rooms/:roomId/seats/:seatId/join",
     success: "RuntimeRoomRecord",
-    errors: [invalidRequestError, "RuntimeNotFoundError", "RuntimeRuleError"],
+    errors: [invalidRequestError, "RuntimeNotFoundError", "RuntimeRuleError", ...identityErrors],
   }),
   route({
     surface: "runtime",
@@ -142,7 +178,14 @@ export const apiContractRoutes: readonly ApiContractRoute[] = [
     method: "POST",
     path: "/runtime/rooms/:roomId/actions",
     success: "RuntimeRoomRecord",
-    errors: runtimeActionErrors,
+    errors: [...runtimeActionErrors, ...identityErrors],
+  }),
+  route({
+    surface: "runtime",
+    method: "GET",
+    path: "/runtime/rooms/:roomId/events",
+    success: "RuntimeEventEnvelope SSE",
+    errors: ["RuntimeNotFoundError", "RuntimeRuleError"],
   }),
   route({
     surface: "runtime",
@@ -172,7 +215,7 @@ export const apiContractRoutes: readonly ApiContractRoute[] = [
     method: "POST",
     path: "/content/packages/:packageId/publish",
     success: "ScriptVersionRecord",
-    errors: [invalidRequestError, ...contentNotFoundErrors, "ContentValidationError", "ContentPublishBlockedError"],
+    errors: [invalidRequestError, ...contentNotFoundErrors, "ContentValidationError", "ContentPublishBlockedError", ...identityErrors],
   }),
   route({
     surface: "content",
@@ -190,7 +233,7 @@ export const apiContractRoutes: readonly ApiContractRoute[] = [
   }),
 ];
 
-const surfaceOrder: readonly ApiSurface[] = ["creation", "review", "runtime", "content", "demo", "generation"];
+const surfaceOrder: readonly ApiSurface[] = ["creation", "review", "runtime", "content", "demo", "generation", "audit"];
 
 export function listApiContractRoutes(surface: ApiSurface): readonly ApiContractRoute[] {
   return apiContractRoutes.filter((contractRoute) => contractRoute.surface === surface);

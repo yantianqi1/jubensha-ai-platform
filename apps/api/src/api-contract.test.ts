@@ -9,6 +9,10 @@ describe("api contract routes", () => {
   it("keeps Studio creation endpoints explicit", () => {
     expect(listApiContractRoutes("creation").map((route) => route.path)).toEqual([
       "/creation/story-bibles/generate",
+      "/creation/generation-jobs",
+      "/creation/generation-jobs/:jobId",
+      "/creation/generation-jobs/:jobId/run",
+      "/creation/generation-jobs/:jobId/events",
       "/creation/story-bibles/compile-draft",
       "/creation/theme-assets/compile",
       "/creation/theme-assets/jobs",
@@ -46,7 +50,7 @@ describe("api contract routes", () => {
           method: "POST",
           path: "/creation/theme-assets/jobs/:jobId/run",
           success: "ThemeAssetJobRecord",
-          errors: ["ThemeAssetJobNotFoundError"],
+          errors: ["ThemeAssetJobNotFoundError", "ThemeAssetJobConflictError", "IdentityRequired", "IdentityMismatch"],
         }),
       ]),
     );
@@ -60,6 +64,7 @@ describe("api contract routes", () => {
         expect.objectContaining({ surface: "runtime", path: "/runtime/rooms/:roomId/actions" }),
         expect.objectContaining({ surface: "runtime", path: "/runtime/rooms/:roomId/snapshot" }),
         expect.objectContaining({ surface: "runtime", path: "/runtime/rooms/:roomId/seats/:seatId/snapshot" }),
+        expect.objectContaining({ surface: "runtime", path: "/runtime/rooms/:roomId/events" }),
       ]),
     );
   });
@@ -69,6 +74,7 @@ describe("api contract routes", () => {
       expect.arrayContaining([
         expect.objectContaining({ surface: "demo", path: "/demo/fog-harbor" }),
         expect.objectContaining({ surface: "generation", path: "/generation/rooms/:roomId/npc/:npcCode/ask" }),
+        expect.objectContaining({ surface: "audit", path: "/audit/events" }),
       ]),
     );
   });
@@ -102,11 +108,11 @@ describe("api contract routes", () => {
         }),
         expect.objectContaining({
           path: "/content/packages/:packageId/publish",
-          errors: ["InvalidRequest", "ContentNotFoundError", "ContentValidationError", "ContentPublishBlockedError"],
+          errors: ["InvalidRequest", "ContentNotFoundError", "ContentValidationError", "ContentPublishBlockedError", "IdentityRequired", "IdentityMismatch"],
         }),
         expect.objectContaining({
           path: "/runtime/rooms/:roomId/actions",
-          errors: ["InvalidRequest", "RuntimeConflictError", "RuntimeNotFoundError", "RuntimeRuleError"],
+          errors: ["InvalidRequest", "RuntimeConflictError", "RuntimeNotFoundError", "RuntimeRuleError", "IdentityRequired", "IdentityMismatch"],
         }),
       ]),
     );
@@ -114,12 +120,13 @@ describe("api contract routes", () => {
 
   it("discovers routes grouped by API surface", () => {
     expect(discoverApiSurfaceRoutes()).toEqual([
-      expect.objectContaining({ surface: "creation", routeCount: 6 }),
+      expect.objectContaining({ surface: "creation", routeCount: 10 }),
       expect.objectContaining({ surface: "review", routeCount: 2 }),
-      expect.objectContaining({ surface: "runtime", routeCount: 9 }),
+      expect.objectContaining({ surface: "runtime", routeCount: 10 }),
       expect.objectContaining({ surface: "content", routeCount: 7 }),
       expect.objectContaining({ surface: "demo", routeCount: 1 }),
       expect.objectContaining({ surface: "generation", routeCount: 1 }),
+      expect.objectContaining({ surface: "audit", routeCount: 1 }),
     ]);
   });
 });

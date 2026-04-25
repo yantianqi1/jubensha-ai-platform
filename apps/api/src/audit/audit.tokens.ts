@@ -1,0 +1,2 @@
+export const AUDIT_REPOSITORY = Symbol("AUDIT_REPOSITORY");
+export const AUDIT_ID_GENERATOR = Symbol("AUDIT_ID_GENERATOR");

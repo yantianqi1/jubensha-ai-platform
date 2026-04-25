@@ -15,6 +15,8 @@ export type RequestLogEntry = Readonly<{
   path: string;
   status: number;
   errorCode?: string;
+  operatorId?: string;
+  playerId?: string;
 }>;
 
 export type RequestLoggerSink = Readonly<{
@@ -47,6 +49,7 @@ type RequestLike = Readonly<{
   method?: string;
   originalUrl?: string;
   url?: string;
+  headers?: Readonly<Record<string, string | readonly string[] | undefined>>;
 }>;
 
 type ResponseLike = Readonly<{
@@ -54,9 +57,14 @@ type ResponseLike = Readonly<{
 }>;
 
 function createBaseEntry(request: RequestLike): Omit<RequestLogEntry, "status"> {
+  const operatorId = readHeader(request.headers, "x-operator-id");
+  const playerId = readHeader(request.headers, "x-player-id");
+
   return {
     method: request.method ?? "UNKNOWN",
     path: request.originalUrl ?? request.url ?? "UNKNOWN",
+    ...(operatorId ? { operatorId } : {}),
+    ...(playerId ? { playerId } : {}),
   };
 }
 
@@ -94,4 +102,17 @@ function getHttpErrorCode(response: string | object): string {
   }
 
   return UNKNOWN_ERROR_CODE;
+}
+
+function readHeader(
+  headers: RequestLike["headers"],
+  key: string,
+): string | undefined {
+  const value = headers?.[key] ?? headers?.[key.toLowerCase()];
+
+  if (Array.isArray(value)) {
+    return value[0];
+  }
+
+  return typeof value === "string" && value.length > 0 ? value : undefined;
 }

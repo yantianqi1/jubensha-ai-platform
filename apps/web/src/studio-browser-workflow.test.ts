@@ -11,11 +11,46 @@ const generatedStoryBible = {
 };
 
 describe("studio browser workflow", () => {
+
+  it("creates, runs, and reads generation jobs before rendering", async () => {
+    const calls: string[] = [];
+    const workflow = createStudioWorkflow({
+      readForm: () => createInitialStudioForm(),
+      createGenerationJob: async () => {
+        calls.push("create");
+        return { id: "generation_job_1", status: "queued", attempts: [] };
+      },
+      runGenerationJob: async (jobId) => {
+        calls.push(`run:${jobId}`);
+        return { id: jobId, status: "ready_for_review", selectedAttemptId: "attempt_1", attempts: [] };
+      },
+      getGenerationJob: async (jobId) => {
+        calls.push(`get:${jobId}`);
+        return {
+          id: jobId,
+          status: "ready_for_review",
+          selectedAttemptId: "attempt_1",
+          attempts: [{ id: "attempt_1", attempt: 1, accepted: true, storyBible: generatedStoryBible, criticDiagnostics: [], storyBibleDiagnostics: [] }],
+        };
+      },
+      compileStoryBibleDraft: async () => ({ draftPackage: {}, flowDiagnostics: [], simulationDiagnostics: [] }),
+      writeCompileSource: () => undefined,
+      renderStudioPanel: () => undefined,
+      renderCreationPanel: () => undefined,
+    });
+
+    await workflow.generateStoryBible();
+
+    expect(calls).toEqual(["create", "run:generation_job_1", "get:generation_job_1"]);
+  });
+
   it("backfills generated StoryBible JSON into compile draft input", async () => {
     const writes: string[] = [];
     const workflow = createStudioWorkflow({
       readForm: () => createInitialStudioForm(),
-      generateStoryBible: async () => ({ storyBible: generatedStoryBible, attempts: [], criticDiagnostics: [], storyBibleDiagnostics: [] }),
+      createGenerationJob: async () => ({ id: "generation_job_1", status: "queued", attempts: [] }),
+      runGenerationJob: async () => ({ id: "generation_job_1", status: "ready_for_review", selectedAttemptId: "attempt_1", attempts: [{ id: "attempt_1", attempt: 1, accepted: true, storyBible: generatedStoryBible, criticDiagnostics: [], storyBibleDiagnostics: [] }] }),
+      getGenerationJob: async () => ({ id: "generation_job_1", status: "ready_for_review", selectedAttemptId: "attempt_1", attempts: [{ id: "attempt_1", attempt: 1, accepted: true, storyBible: generatedStoryBible, criticDiagnostics: [], storyBibleDiagnostics: [] }] }),
       compileStoryBibleDraft: async () => ({ draftPackage: {}, flowDiagnostics: [], simulationDiagnostics: [] }),
       writeCompileSource: (value) => writes.push(value),
       renderStudioPanel: () => undefined,
@@ -33,7 +68,9 @@ describe("studio browser workflow", () => {
     const creationPanels: Array<{ diagnostics: string; output: string }> = [];
     const workflow = createStudioWorkflow({
       readForm: () => createInitialStudioForm(),
-      generateStoryBible: async () => ({ storyBible: generatedStoryBible, attempts: [], criticDiagnostics: [], storyBibleDiagnostics: [] }),
+      createGenerationJob: async () => ({ id: "generation_job_1", status: "queued", attempts: [] }),
+      runGenerationJob: async () => ({ id: "generation_job_1", status: "ready_for_review", selectedAttemptId: "attempt_1", attempts: [{ id: "attempt_1", attempt: 1, accepted: true, storyBible: generatedStoryBible, criticDiagnostics: [], storyBibleDiagnostics: [] }] }),
+      getGenerationJob: async () => ({ id: "generation_job_1", status: "ready_for_review", selectedAttemptId: "attempt_1", attempts: [{ id: "attempt_1", attempt: 1, accepted: true, storyBible: generatedStoryBible, criticDiagnostics: [], storyBibleDiagnostics: [] }] }),
       compileStoryBibleDraft: async () => ({
         draftPackage: { id: "pkg_1" },
         flowDiagnostics: [],
@@ -59,7 +96,9 @@ describe("studio browser workflow", () => {
     const creationPanels: Array<{ diagnostics: string; output: string }> = [];
     const workflow = createStudioWorkflow({
       readForm: () => createInitialStudioForm(),
-      generateStoryBible: async () => ({ storyBible: generatedStoryBible, attempts: [], criticDiagnostics: [], storyBibleDiagnostics: [] }),
+      createGenerationJob: async () => ({ id: "generation_job_1", status: "queued", attempts: [] }),
+      runGenerationJob: async () => ({ id: "generation_job_1", status: "ready_for_review", selectedAttemptId: "attempt_1", attempts: [{ id: "attempt_1", attempt: 1, accepted: true, storyBible: generatedStoryBible, criticDiagnostics: [], storyBibleDiagnostics: [] }] }),
+      getGenerationJob: async () => ({ id: "generation_job_1", status: "ready_for_review", selectedAttemptId: "attempt_1", attempts: [{ id: "attempt_1", attempt: 1, accepted: true, storyBible: generatedStoryBible, criticDiagnostics: [], storyBibleDiagnostics: [] }] }),
       compileStoryBibleDraft: async () => ({
         draftPackage: { id: "pkg_1", title: "雨夜钟楼", packageCode: "rain_tower" },
         flowDiagnostics: [{ severity: "error", code: "missing_scene", message: "缺少场景" }],
@@ -83,7 +122,9 @@ describe("studio browser workflow", () => {
     const compiledSources: unknown[] = [];
     const workflow = createStudioWorkflow({
       readForm: () => createInitialStudioForm(),
-      generateStoryBible: async () => ({ storyBible: generatedStoryBible, attempts: [], criticDiagnostics: [], storyBibleDiagnostics: [] }),
+      createGenerationJob: async () => ({ id: "generation_job_1", status: "queued", attempts: [] }),
+      runGenerationJob: async () => ({ id: "generation_job_1", status: "ready_for_review", selectedAttemptId: "attempt_1", attempts: [{ id: "attempt_1", attempt: 1, accepted: true, storyBible: generatedStoryBible, criticDiagnostics: [], storyBibleDiagnostics: [] }] }),
+      getGenerationJob: async () => ({ id: "generation_job_1", status: "ready_for_review", selectedAttemptId: "attempt_1", attempts: [{ id: "attempt_1", attempt: 1, accepted: true, storyBible: generatedStoryBible, criticDiagnostics: [], storyBibleDiagnostics: [] }] }),
       compileStoryBibleDraft: async (storyBible) => {
         compiledSources.push(storyBible);
         return { draftPackage: { packageCode: "rain" }, flowDiagnostics: [], simulationDiagnostics: [] };

@@ -22,6 +22,16 @@ Run commands from the repository root unless a package filter is shown.
 - `pnpm --filter @jubensha/api test -- runtime`: run targeted API tests.
 - `pnpm db:up` / `pnpm db:down`: start or stop local Postgres/Redis via Docker Compose.
 
+## Local Startup Path
+
+The current product entry is the built Studio surface, not the legacy MVP root page.
+
+- Start dependencies with `pnpm db:up`.
+- Start the app API/static host with `pnpm --filter @jubensha/api dev`.
+- Use fixed local port `8888` for API and static hosting.
+- Open Studio at `http://127.0.0.1:8888/studio/`.
+- Built Studio files are served from `apps/web/dist/studio/index.html`; root `/` redirects to `/studio/`.
+
 ## Coding Style & Naming Conventions
 
 Use TypeScript ES modules, two-space indentation, explicit exported interfaces, and immutable-first data (`readonly`, object spreads, no parameter mutation). Keep domain logic small and explicit: prefer named helpers over nested conditionals. Use kebab-case filenames such as `theme-asset-job.ts`; use PascalCase for classes and interfaces, camelCase for functions and variables.

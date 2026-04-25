@@ -3,18 +3,28 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   Inject,
   Param,
   Post,
+  Query,
+  Sse,
   UseFilters,
+  type MessageEvent,
 } from "@nestjs/common";
 import { RuntimeHttpErrorFilter } from "./runtime-http-error.filter.js";
+import { from, type Observable } from "rxjs";
 import { RuntimeService } from "./runtime-service.js";
+import { AuditService } from "../audit/audit-service.js";
+import { readRequestId, requirePlayer, type RequestHeaders } from "../identity/request-identity.js";
 
 @UseFilters(RuntimeHttpErrorFilter)
 @Controller("runtime")
 export class RuntimeController {
-  constructor(@Inject(RuntimeService) private readonly runtimeService: RuntimeService) {}
+  constructor(
+    @Inject(RuntimeService) private readonly runtimeService: RuntimeService,
+    @Inject(AuditService) private readonly auditService: AuditService,
+  ) {}
 
   @Post("rooms")
   createRoom(@Body() body: unknown) {
@@ -32,12 +42,24 @@ export class RuntimeController {
   }
 
   @Post("rooms/:roomId/seats/:seatId/join")
-  joinSeat(
+  async joinSeat(
     @Param("roomId") roomId: string,
     @Param("seatId") seatId: string,
     @Body() body: unknown,
+    @Headers() headers: RequestHeaders,
   ) {
-    return this.runtimeService.joinSeat(roomId, readJoinSeatInput(seatId, body));
+    const input = readJoinSeatInput(seatId, body);
+    const actor = requirePlayer(headers, input.playerId);
+    const requestId = readRequestId(headers);
+
+    try {
+      const room = await this.runtimeService.joinSeat(roomId, input);
+      await this.auditService.record({ action: "join_seat", actor, targetType: "runtime_room", targetId: roomId, status: "succeeded", ...optionalRequestId(requestId) });
+      return room;
+    } catch (error) {
+      await this.auditService.record({ action: "join_seat", actor, targetType: "runtime_room", targetId: roomId, status: "failed", ...optionalRequestId(requestId), errorCode: readErrorCode(error) });
+      throw error;
+    }
   }
 
   @Get("rooms/:roomId/snapshot")
@@ -56,14 +78,42 @@ export class RuntimeController {
   }
 
   @Post("rooms/:roomId/actions")
-  applyRoomAction(@Param("roomId") roomId: string, @Body() body: unknown) {
-    return this.runtimeService.applyRoomAction(roomId, readActionInput(body));
+  async applyRoomAction(
+    @Param("roomId") roomId: string,
+    @Body() body: unknown,
+    @Headers() headers: RequestHeaders,
+  ) {
+    const actor = requirePlayer(headers);
+    const requestId = readRequestId(headers);
+
+    try {
+      const room = await this.runtimeService.applyRoomAction(roomId, readActionInput(body));
+      await this.auditService.record({ action: "apply_room_action", actor, targetType: "runtime_room", targetId: roomId, status: "succeeded", ...optionalRequestId(requestId) });
+      return room;
+    } catch (error) {
+      await this.auditService.record({ action: "apply_room_action", actor, targetType: "runtime_room", targetId: roomId, status: "failed", ...optionalRequestId(requestId), errorCode: readErrorCode(error) });
+      throw error;
+    }
+  }
+
+  @Sse("rooms/:roomId/events")
+  async streamRoomEvents(
+    @Param("roomId") roomId: string,
+    @Query("afterEventId") afterEventId?: string,
+  ): Promise<Observable<MessageEvent>> {
+    const input = afterEventId ? { afterEventId } : {};
+    const events = await this.runtimeService.listRuntimeEvents(roomId, input);
+    return from(events.map(toSseMessage));
   }
 
   @Post("rooms/:roomId/replay")
   replayRoom(@Param("roomId") roomId: string) {
     return this.runtimeService.replayRoom(roomId);
   }
+}
+
+function toSseMessage(event: { readonly eventId: string; readonly type: string }): MessageEvent {
+  return { data: event, id: event.eventId, type: event.type };
 }
 
 function readCreateRoomInput(body: unknown) {
@@ -109,4 +159,12 @@ function readExpectedRevision(value: unknown): number {
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function readErrorCode(error: unknown): string {
+  return error instanceof Error ? error.name : "UnknownError";
+}
+
+function optionalRequestId(requestId: string | undefined): { readonly requestId?: string } {
+  return requestId ? { requestId } : {};
 }
